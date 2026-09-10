@@ -1,0 +1,3 @@
+import * as openAIService from '../services/OpenAIService.js';
+export async function chat(req, res, next) { try { const question = req.body.question?.trim(); if (!question) return res.status(400).json({ message: 'La pregunta es obligatoria' }); res.json(await openAIService.answerQuestion(question)); } catch (error) { next(error); } }
+export async function analyze(req, res, next) { try { const description = req.body.description?.trim(); if (!description) return res.status(400).json({ message: 'La descripción es obligatoria' }); res.json(await openAIService.analyzeTicket(description)); } catch (error) { next(error); } }

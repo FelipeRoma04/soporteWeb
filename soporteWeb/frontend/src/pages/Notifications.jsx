@@ -1,0 +1,1 @@
+export default function Notifications({ notifications = [] }) { return <section className="page-body"><h2>Notificaciones</h2>{notifications.map((item) => <p key={item.id}>{item.message}</p>)}</section>; }

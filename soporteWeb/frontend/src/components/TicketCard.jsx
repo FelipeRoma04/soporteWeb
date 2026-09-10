@@ -1,0 +1,1 @@
+export default function TicketCard({ ticket, children }) { return <article className="panel ticket-card"><strong>{ticket.subject}</strong><p className="muted">{ticket.category} · {ticket.priority}</p>{children}</article>; }

@@ -1,0 +1,1 @@
+export default function MetricsCard({ label, value, trend, icon, color = 'orange' }) { return <div className="stat-card"><div className={`stat-icon ${color}`}>{icon}</div><div><p>{label}</p><strong>{value}</strong><small>{trend}</small></div></div>; }

@@ -1,0 +1,1 @@
+export default function TicketDetail({ ticket }) { return <section className="page-body"><h2>{ticket?.subject || 'Detalle del ticket'}</h2><p className="muted">Consulta aquí la conversación y el historial de la solicitud.</p></section>; }
