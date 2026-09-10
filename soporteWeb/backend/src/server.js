@@ -11,7 +11,12 @@ import categoryRoutes from './routes/categories.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
+const allowedOrigins = [
+	process.env.CLIENT_URL || 'http://localhost:5173',
+	'http://localhost:5173',
+	'http://127.0.0.1:5173'
+];
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'soporte-web-api' }));
 app.use('/api/auth', authRoutes);
