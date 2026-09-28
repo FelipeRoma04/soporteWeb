@@ -8,8 +8,13 @@ function serviceError(message, status) { const error = new Error(message); error
 
 export async function register({ name, email, password }) {
   if (!name?.trim() || !email?.trim() || !password || password.length < 8) throw serviceError('Nombre, email y contraseña de 8 caracteres son obligatorios', 400);
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const existingUser = await userModel.findByEmail(normalizedEmail);
+  if (existingUser) throw serviceError('Ya existe una cuenta con ese correo electrónico', 409);
+
   const passwordHash = await bcrypt.hash(password, 12);
-  const safeUser = toSafeUser(await userModel.createUser({ name: name.trim(), email: email.trim(), passwordHash }));
+  const safeUser = toSafeUser(await userModel.createUser({ name: name.trim(), email: normalizedEmail, passwordHash }));
   return { user: safeUser, token: tokenFor(safeUser) };
 }
 

@@ -15,8 +15,8 @@ export default function Login({ onAuth }) {
 		try {
 			const response = await (mode === 'login' ? login(payload) : register(payload));
 			onAuth(response.data.user, response.data.token);
-		} catch {
-			setError('No se pudo conectar con la API. Verifica el backend y tus credenciales.');
+		} catch (error) {
+			setError(error.response?.data?.message || 'No se pudo conectar con la API. Verifica el backend y tus credenciales.');
 		} finally { setLoading(false); }
 	}
 

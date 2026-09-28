@@ -86,6 +86,9 @@ CREATE TABLE ai_interactions (
   user_id INT UNSIGNED NOT NULL,
   question TEXT NOT NULL,
   answer MEDIUMTEXT NOT NULL,
+  source_article_ids JSON NULL,
+  rating ENUM('helpful', 'not_helpful') NULL,
+  rated_at TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
