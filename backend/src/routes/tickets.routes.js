@@ -1,0 +1,13 @@
+import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.js';
+import { requireRole } from '../middleware/roleGuard.js';
+import * as ticketController from '../controllers/TicketController.js';
+const router = Router();
+router.use(requireAuth);
+router.get('/', ticketController.list);
+router.post('/', ticketController.create);
+router.get('/:id/comments', ticketController.listComments);
+router.post('/:id/comments', ticketController.createComment);
+router.get('/:id/history', ticketController.listHistory);
+router.patch('/:id/status', requireRole('agent', 'admin'), ticketController.updateStatus);
+export default router;

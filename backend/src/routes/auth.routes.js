@@ -1,0 +1,11 @@
+import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.js';
+import { rateLimit } from '../middleware/rateLimit.js';
+import { loginThrottle } from '../middleware/loginThrottle.js';
+import * as authController from '../controllers/AuthController.js';
+const router = Router();
+router.post('/register', authController.register);
+router.post('/login', loginThrottle(), authController.login);
+router.get('/me', requireAuth, authController.me);
+router.patch('/password', requireAuth, rateLimit({ windowMs: 15 * 60_000, max: 5 }), authController.changePassword);
+export default router;

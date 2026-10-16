@@ -1,0 +1,26 @@
+server {
+  listen ${PORT};
+  server_name _;
+
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # Archivos con hash de Vite: caché larga
+  location /assets/ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+  }
+
+  # index.html nunca se cachea, para que los despliegues se vean al instante
+  location = /index.html {
+    add_header Cache-Control "no-store";
+  }
+
+  # Aplicación de una sola página: cualquier ruta devuelve index.html
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+
+  gzip on;
+  gzip_types text/css application/javascript application/json image/svg+xml;
+}
