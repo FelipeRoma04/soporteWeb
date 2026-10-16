@@ -1,0 +1,14 @@
+import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.js';
+import { requireRole } from '../middleware/roleGuard.js';
+import * as userController from '../controllers/UserController.js';
+const router = Router();
+router.use(requireAuth);
+router.get('/notifications', userController.notifications);
+router.patch('/notifications/read-all', userController.markAllNotificationsAsRead);
+router.patch('/notifications/:id/read', userController.markNotificationAsRead);
+router.use(requireRole('admin'));
+router.get('/', userController.list);
+router.patch('/:id/role', userController.updateRole);
+router.patch('/:id/status', userController.updateStatus);
+export default router;

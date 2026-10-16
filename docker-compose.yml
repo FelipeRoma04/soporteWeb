@@ -1,0 +1,22 @@
+# Base de datos MySQL para desarrollo. Arranca con: npm run db:up
+services:
+  db:
+    image: mysql:8.4
+    container_name: soporteweb-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: soporte_dev
+      MYSQL_DATABASE: soporte_web
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3307:3306"
+    volumes:
+      - soporte_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-psoporte_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  soporte_db_data:

@@ -1,0 +1,21 @@
+{
+  "name": "soporte-web",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "setup": "npm install && npm run install:all && npm --prefix backend run init-env",
+    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "db:up": "docker compose up -d",
+    "db:setup": "npm --prefix backend run db:setup",
+    "create-admin": "npm --prefix backend run create-admin",
+    "dev": "concurrently \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "build": "npm --prefix frontend run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "prettier": "^3.9.10"
+  }
+}
