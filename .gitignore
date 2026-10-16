@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.tools/
+*.log
+.DS_Store
+knowledge_articles_backup_*
+backend/.env
+frontend/.env
+frontend/.env.local

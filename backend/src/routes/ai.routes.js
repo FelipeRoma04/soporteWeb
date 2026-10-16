@@ -1,0 +1,11 @@
+import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.js';
+import { rateLimit } from '../middleware/rateLimit.js';
+import * as aiController from '../controllers/AIController.js';
+const router = Router();
+router.use(requireAuth);
+router.use(rateLimit({ windowMs: 60_000, max: 20 }));
+router.post('/chat', aiController.chat);
+router.post('/interactions/:interactionId/feedback', aiController.feedback);
+router.post('/analyze', aiController.analyze);
+export default router;
