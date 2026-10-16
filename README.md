@@ -58,37 +58,61 @@ Los errores se lanzan con un `status` HTTP y los recoge `errorHandler`; cualquie
 
 ```
 .
-├── package.json            Scripts de la raíz: setup, dev, db:up, db:setup, build
-├── docker-compose.yml      MySQL 8.4 para desarrollo (puerto 3307 del equipo)
-├── backend/
+├── README.md
+├── package.json              Scripts de la raíz: setup, dev, db:up, db:setup, create-admin, build
+├── package-lock.json
+├── docker-compose.yml        MySQL 8.4 para desarrollo (puerto 3307 del equipo)
+├── .gitignore                Excluye .env, node_modules, dist y copias de seguridad
+│
+├── backend/                  API REST (Node.js + Express)
+│   ├── Dockerfile            Imagen de producción (Cloud Run)
+│   ├── .dockerignore         Mantiene .env y node_modules fuera de la imagen
+│   ├── .env.example          Plantilla de variables de entorno (el .env real no se sube)
 │   ├── package.json
-│   ├── scripts/            Utilidades de instalación (se ejecutan con npm run …)
-│   │   ├── init-env.js       Crea backend/.env con un JWT_SECRET aleatorio
-│   │   ├── db-setup.js       Crea la base, aplica el esquema, el admin y las guías
-│   │   └── create-admin.js   Crea/promueve un administrador o restablece su clave
+│   ├── package-lock.json
+│   ├── scripts/              Utilidades que se ejecutan con npm run …
+│   │   ├── env.js              Ayudas compartidas por los scripts (lectura de variables)
+│   │   ├── init-env.js         Crea backend/.env con un JWT_SECRET aleatorio
+│   │   ├── db-setup.js         Crea la base, aplica el esquema, el admin y las guías
+│   │   └── create-admin.js     Crea/promueve un administrador o restablece su clave
 │   └── src/
-│       ├── server.js         Arranque de Express, CORS, rutas y /api/health
-│       ├── config/db.js      Pool de conexiones MySQL (lee DB_* del .env)
-│       ├── routes/           ai · auth · categories · dashboard · knowledge · tickets · users
-│       ├── controllers/      Un controlador por recurso
-│       ├── middleware/       auth · roleGuard · loginThrottle · rateLimit · errorHandler
-│       ├── services/         AuthService · TicketService · KnowledgeService · OpenAIService
-│       └── models/           User · Ticket · Comment · TicketHistory · Notification ·
-│                             Category · Knowledge · AIInteraction · Role
-├── frontend/
+│       ├── server.js           Arranque de Express, CORS, rutas y /api/health
+│       ├── config/
+│       │   └── db.js             Pool MySQL (host/puerto o socket de Cloud SQL, utf8mb4)
+│       ├── routes/             ai · auth · categories · dashboard · knowledge · tickets · users
+│       ├── controllers/        AI · Auth · Category · Dashboard · Knowledge · Ticket · User
+│       ├── middleware/         auth · roleGuard · loginThrottle · rateLimit · errorHandler
+│       ├── services/           AuthService · TicketService · KnowledgeService ·
+│       │                       OpenAIService (proveedor de IA: OpenAI, Anthropic o Groq)
+│       └── models/             User · Ticket · Comment · TicketHistory · Notification ·
+│                               Category · Knowledge · AIInteraction · Role
+│
+├── frontend/                 Interfaz (React 18 + Vite)
+│   ├── Dockerfile            Compila con Vite y sirve con nginx (Cloud Run)
+│   ├── .dockerignore
+│   ├── nginx.conf.template   Configuración de nginx (SPA, caché, puerto ${PORT})
+│   ├── .env.example          VITE_API_URL: dirección de la API (se fija al compilar)
+│   ├── index.html
+│   ├── vite.config.js
 │   ├── package.json
+│   ├── package-lock.json
 │   └── src/
 │       ├── main.jsx · App.jsx  Punto de entrada y vistas principales
 │       ├── api.js              Cliente axios (añade el token a cada petición)
+│       ├── styles.css
 │       ├── context/            AuthContext: usuario y sesión actuales
 │       ├── layouts/            MainLayout: cabecera + barra lateral
 │       ├── pages/              Login · Register · Dashboard · Tickets · TicketDetail ·
 │       │                       Knowledge · ArticleDetail · AIChat · Notifications ·
 │       │                       Users · Settings
-│       ├── components/         Sidebar · Header · TicketCard · TicketModal · KnowledgeCard ·
-│       │                       MetricsCard · Charts · ChatBot · NotificationBell · ProtectedRoute
-│       ├── services/           Llamadas a la API por recurso (auth, tickets, knowledge, IA…)
-│       └── styles.css
+│       ├── components/         Sidebar · Header · TicketCard · TicketModal · StatusPicker ·
+│       │                       KnowledgeCard · MetricsCard · Charts · ChatBot ·
+│       │                       NotificationBell · ProtectedRoute
+│       ├── services/           Llamadas a la API por recurso (auth, tickets, knowledge,
+│       │                       notificaciones, IA)
+│       └── utils/
+│           └── roles.js        Ayudas para comprobar roles en la interfaz
+│
 └── database/
     ├── schema.sql                      Esquema completo e idempotente
     └── seed-knowledge-general.sql      26 guías de ejemplo para la base de conocimiento
