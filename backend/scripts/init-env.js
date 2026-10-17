@@ -9,10 +9,10 @@ const target = path.join(backendDir, '.env');
 
 try {
   await access(target);
-  console.log('• backend/.env ya existe: no se modifica.');
+  console.log('• backend/.env ya existe: no se modifica; verifica que use DATABASE_URL o la configuración PostgreSQL local.');
 } catch {
   const example = await readFile(path.join(backendDir, '.env.example'), 'utf8');
   await writeFile(target, example.replace(/^JWT_SECRET=.*$/m, `JWT_SECRET=${randomBytes(32).toString('hex')}`));
   console.log('✔ backend/.env creado con una clave JWT aleatoria.');
 }
-console.log('  Ábrelo y completa ADMIN_PASSWORD (y DB_PASSWORD si no usas el docker-compose incluido).');
+console.log('  Ábrelo y completa ADMIN_PASSWORD y DATABASE_URL (o configura la base local de Docker).');

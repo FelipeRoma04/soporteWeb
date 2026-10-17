@@ -23,7 +23,7 @@ if (process.env.JWT_SECRET === 'change-this-secret') {
 	console.warn('⚠ JWT_SECRET usa el valor de ejemplo. Está bien para probar, pero cámbialo antes de publicar la app.');
 }
 
-const isOutdatedSchema = (error) => ['ER_BAD_FIELD_ERROR', 'ER_NO_SUCH_TABLE', 'ER_BAD_DB_ERROR'].includes(error.code);
+const isOutdatedSchema = (error) => ['42P01', '42703', '3D000'].includes(error.code);
 
 const app = express();
 const allowedOrigins = [
@@ -59,7 +59,7 @@ const server = app.listen(port, () => {
 		.then(() => console.log('Base de datos conectada'))
 		.catch((error) => console.error(isOutdatedSchema(error)
 			? '✖ La base de datos está vacía o desactualizada. Ejecuta "npm run db:setup" y reinicia la API.'
-			: `✖ No se pudo conectar a MySQL (${error.code || error.message}). Revisa backend/.env y ejecuta "npm run db:setup".`));
+			: `✖ No se pudo conectar a PostgreSQL (${error.code || error.message}). Revisa DATABASE_URL o la configuración DB_* y ejecuta "npm run db:setup".`));
 });
 server.on('error', (error) => {
 	console.error(error.code === 'EADDRINUSE' ? `✖ El puerto ${port} ya está en uso. Cierra el programa que lo ocupa o cambia PORT en backend/.env.` : error);

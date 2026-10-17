@@ -1,22 +1,22 @@
-# Base de datos MySQL para desarrollo. Arranca con: npm run db:up
+# Base de datos PostgreSQL para desarrollo. Arranca con: npm run db:up
 services:
   db:
-    image: mysql:8.4
+    image: postgres:16
     container_name: soporteweb-db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: soporte_dev
-      MYSQL_DATABASE: soporte_web
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+      POSTGRES_USER: soporte_web
+      POSTGRES_PASSWORD: soporte_dev
+      POSTGRES_DB: soporte_web
     ports:
-      - "3307:3306"
+      - "5433:5432"
     volumes:
-      - soporte_db_data:/var/lib/mysql
+      - soporte_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-psoporte_dev"]
+      test: ["CMD-SHELL", "pg_isready -U soporte_web -d soporte_web"]
       interval: 5s
       timeout: 5s
       retries: 20
 
 volumes:
-  soporte_db_data:
+  soporte_pg_data:
