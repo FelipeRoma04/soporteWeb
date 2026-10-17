@@ -2,7 +2,7 @@
 
 Mesa de ayuda con tickets, comentarios, notificaciones, base de conocimiento y un asistente de IA que responde usando esas guías.
 
-**Tecnologías:** React 18 + Vite (interfaz) · Node.js 20 + Express (API) · MySQL 8 · OpenAI, Anthropic o Groq (opcional).
+**Tecnologías:** React 18 + Vite (interfaz) · Node.js 20 + Express (API) · PostgreSQL · OpenAI, Anthropic o Groq (opcional).
 
 ## Contenido
 
@@ -24,7 +24,7 @@ Mesa de ayuda con tickets, comentarios, notificaciones, base de conocimiento y u
 flowchart LR
   U[Navegador] -->|HTTP| F[Frontend<br/>React + Vite<br/>:5173]
   F -->|REST /api + JWT| A[API<br/>Node + Express<br/>:4000]
-  A -->|mysql2| D[(MySQL 8<br/>soporte_web)]
+  A -->|pg| D[(PostgreSQL<br/>soporte_web)]
   A -.->|opcional| L[OpenAI / Anthropic / Groq]
 ```
 
@@ -34,12 +34,12 @@ El proyecto es una aplicación de tres capas:
 |---|---|
 | **Frontend** (`frontend/`) | Interfaz de una sola página. Guarda la sesión (token JWT) y consume la API con `axios`. |
 | **API** (`backend/`) | Valida la sesión, aplica permisos por rol, ejecuta la lógica y accede a la base de datos. |
-| **Base de datos** (`database/`) | MySQL 8 con el esquema y las guías de ejemplo. |
+| **Base de datos** (`database/`) | PostgreSQL con el esquema y las guías de ejemplo. |
 
 ### Cómo viaja una petición en la API
 
 ```
-Petición → routes → middleware → controllers → services → models → MySQL
+Petición → routes → middleware → controllers → services → models → PostgreSQL
 ```
 
 | Paso | Responsabilidad |
@@ -61,7 +61,7 @@ Los errores se lanzan con un `status` HTTP y los recoge `errorHandler`; cualquie
 ├── README.md
 ├── package.json              Scripts de la raíz: setup, dev, db:up, db:setup, create-admin, build
 ├── package-lock.json
-├── docker-compose.yml        MySQL 8.4 para desarrollo (puerto 3307 del equipo)
+├── docker-compose.yml        PostgreSQL 16 para desarrollo (puerto 5433 del equipo)
 ├── .gitignore                Excluye .env, node_modules, dist y copias de seguridad
 │
 ├── backend/                  API REST (Node.js + Express)
@@ -78,7 +78,7 @@ Los errores se lanzan con un `status` HTTP y los recoge `errorHandler`; cualquie
 │   └── src/
 │       ├── server.js           Arranque de Express, CORS, rutas y /api/health
 │       ├── config/
-│       │   └── db.js             Pool MySQL (host/puerto o socket de Cloud SQL, utf8mb4)
+│       │   └── db.js             Pool PostgreSQL (DATABASE_URL o host/puerto)
 │       ├── routes/             ai · auth · categories · dashboard · knowledge · tickets · users
 │       ├── controllers/        AI · Auth · Category · Dashboard · Knowledge · Ticket · User
 │       ├── middleware/         auth · roleGuard · loginThrottle · rateLimit · errorHandler
@@ -124,7 +124,8 @@ El archivo se crea con `npm run setup` y **nunca se sube a git** (está en `.git
 
 | Variable | Descripción |
 |---|---|
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Conexión a MySQL. Con el Docker de este repo: `127.0.0.1`, `3307`, `soporte_web`, `root`, `soporte_dev`. |
+| `DATABASE_URL` | Cadena de conexión PostgreSQL (Neon en producción; opcional si usas las variables `DB_*`). |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Conexión PostgreSQL local. Con Docker: `127.0.0.1`, `5433`, `soporte_web`, `soporte_web`, `soporte_dev`. |
 | `JWT_SECRET` | Clave para firmar las sesiones. La genera `npm run setup`. |
 | `PORT` | Puerto de la API (por defecto `4000`). |
 | `CLIENT_URL` | Dirección de la interfaz permitida por CORS (por defecto `http://localhost:5173`). |
@@ -176,7 +177,7 @@ erDiagram
 | Programa | Para qué | Cómo comprobar que está bien |
 |---|---|---|
 | **Node.js 20 o superior** (LTS, nodejs.org) | Ejecutar la API y la interfaz | `node -v` debe mostrar `v20` o más |
-| **Docker Desktop** *o* **MySQL 8** | Base de datos | — |
+| **Docker Desktop** *o* **Neon PostgreSQL** | Base de datos | — |
 | **VS Code** | Editor | — |
 
 Git es opcional: puedes descargar el proyecto como ZIP. Después de instalar Node.js, **cierra y vuelve a abrir VS Code**.
@@ -185,9 +186,9 @@ Git es opcional: puedes descargar el proyecto como ZIP. Después de instalar Nod
 
 ### 2. Base de datos (elige UNA opción)
 
-**Opción A · Docker (la más simple).** Abre Docker Desktop y ejecuta `npm run db:up`. Crea un MySQL con usuario `root` y contraseña `soporte_dev`, accesible en el puerto **3307** del equipo.
+**Opción A · Docker (la más simple).** Abre Docker Desktop y ejecuta `npm run db:up`. Crea PostgreSQL con usuario y base `soporte_web`, contraseña `soporte_dev`, accesible en el puerto **5433** del equipo.
 
-**Opción B · MySQL instalado.** Instala MySQL Community Server 8, anota la contraseña de `root`, comprueba que el servicio está iniciado y pon esa contraseña en `DB_PASSWORD` (puerto `3306`).
+**Opción B · Neon.** Crea un proyecto PostgreSQL gratuito y copia su cadena de conexión en `DATABASE_URL` en `backend/.env`.
 
 ### 3. Instalar y configurar
 
@@ -195,7 +196,7 @@ Git es opcional: puedes descargar el proyecto como ZIP. Después de instalar Nod
 npm run setup
 ```
 
-Instala las dependencias y crea `backend/.env`. Ábrelo y revisa `DB_PORT` (`3307` con Docker), `DB_PASSWORD`, `ADMIN_EMAIL`, `ADMIN_NAME` y `ADMIN_PASSWORD`.
+Instala las dependencias y crea `backend/.env`. Ábrelo y revisa la conexión a la base y `ADMIN_EMAIL`, `ADMIN_NAME` y `ADMIN_PASSWORD`. Si ya tenías `.env`, el comando no lo sobrescribe: actualiza manualmente los valores antiguos de MySQL.
 
 Después crea la base, las tablas, el administrador y las guías de ejemplo:
 
@@ -218,12 +219,12 @@ Inicia sesión con `ADMIN_EMAIL` y `ADMIN_PASSWORD`. Las demás personas se regi
 
 ### Empezar de cero (borra todos los datos)
 
-- Docker: `docker compose down -v`, luego `npm run db:up` y `npm run db:setup`.
-- MySQL local: `DROP DATABASE soporte_web;` y luego `npm run db:setup`.
+- Docker: elimina únicamente el volumen local `soporte_pg_data`, luego `npm run db:up` y `npm run db:setup`.
+- Neon: usa un proyecto de prueba nuevo; `npm run db:setup` es idempotente y no elimina tablas ni datos.
 
-### Actualizar una base de una versión anterior
+### Volver a preparar el esquema
 
-Ejecuta `npm run db:setup` **antes de arrancar** la nueva versión: añade las columnas que falten sin tocar tus datos. Si lo olvidas, `/api/health` responde `"database":"outdated"`.
+`npm run db:setup` se puede repetir: crea los objetos que falten y añade las guías de ejemplo que no existan, sin borrar datos. Las versiones anteriores usaban MySQL; sus tablas y datos no se migran automáticamente a PostgreSQL.
 
 ---
 
@@ -245,7 +246,7 @@ El rol se lee de la base de datos en cada petición, así que un cambio surte ef
 |---|---|
 | `npm run setup` | Instala dependencias y crea `backend/.env` |
 | `npm run dev` | Inicia API e interfaz |
-| `npm run db:up` | Inicia MySQL con Docker |
+| `npm run db:up` | Inicia PostgreSQL con Docker |
 | `npm run db:setup` | Crea/actualiza la base, el administrador y las guías (repetible) |
 | `npm run create-admin` | Crea o promueve al administrador definido en `.env` |
 | `npm --prefix backend run create-admin -- --email ana@empresa.com --name Ana --password clave12345` | Crea o promueve a otra cuenta |
@@ -259,16 +260,16 @@ El rol se lee de la base de datos en cada petición, así que un cambio surte ef
 | Síntoma | Solución |
 |---|---|
 | `'node' no se reconoce` | Reinstala Node.js y reinicia VS Code |
-| *No se pudo conectar a MySQL* | Inicia MySQL (`npm run db:up` o el servicio). Revisa `DB_HOST`/`DB_PORT` (`3307` con Docker) |
-| *MySQL rechazó el usuario o la contraseña* | Corrige `DB_USER` y `DB_PASSWORD` en `backend/.env` |
-| *Port 3307 / 3306 is already allocated* | Otro programa usa ese puerto: ciérralo o cambia el mapeo en `docker-compose.yml` y `DB_PORT` |
+| *No se pudo conectar a PostgreSQL* | Inicia PostgreSQL (`npm run db:up`) o revisa `DATABASE_URL` / `DB_HOST` y `DB_PORT` (`5433` con Docker) |
+| *La base rechazó el usuario o la contraseña* | Corrige la cadena `DATABASE_URL` o `DB_USER` y `DB_PASSWORD` en `backend/.env` |
+| *Port 5433 is already allocated* | Otro programa usa ese puerto: ciérralo o cambia el mapeo en `docker-compose.yml` y `DB_PORT` |
 | *El puerto 4000/5173 ya está en uso* | Cierra el otro programa o cambia `PORT` en `backend/.env` |
 | *Falta JWT_SECRET* | Ejecuta `npm run setup` |
 | *Error interno del servidor* al registrarse o iniciar sesión | Mira el error real en la terminal de la API. Si dice `Table … doesn't exist`, ejecuta `npm run db:setup` |
 | *Credenciales incorrectas* tras reiniciar la base | Si ejecutaste `down -v`, los usuarios se borraron: vuelve a crear la cuenta o ejecuta `npm run db:setup` |
 | *La base de datos está vacía o desactualizada* | Ejecuta `npm run db:setup` y reinicia la API |
 | No aparecen **Categorías** / **Usuarios** o el botón de añadir artículos | Esas opciones son solo para administradores: usa `npm run create-admin` |
-| Tildes como `?` (`Colaboraci?n`) | Se cargó el SQL por una tubería de PowerShell (`Get-Content … \| docker exec …`), que no usa UTF-8. Usa `npm run db:setup`, o `docker cp` y `mysql … < archivo` **dentro** del contenedor. Para repararlo: empezar de cero |
+| Tildes como `?` (`Colaboraci?n`) | Comprueba que los archivos SQL se guardaron como UTF-8 y vuelve a ejecutar `npm run db:setup`. |
 | Te saca al login de repente | La sesión dura 8 horas, o cambiaron la contraseña de tu cuenta (cierra todas las sesiones). Vuelve a entrar |
 | *Demasiados intentos de inicio de sesión* | Tras 5 fallos con el mismo correo y equipo se bloquea 15 minutos |
 | Aviso `DEP0040 punycode` al arrancar | Es inofensivo (viene de una dependencia) |
@@ -287,10 +288,22 @@ El rol se lee de la base de datos en cada petición, así que un cambio surte ef
 ## Antes de publicar en internet
 
 - Usa un `JWT_SECRET` propio y largo (con `NODE_ENV=production` la API se niega a arrancar con el de ejemplo).
-- Cambia `DB_PASSWORD` y no uses `root` como usuario de la aplicación.
+- Usa una cadena `DATABASE_URL` privada y no la guardes en el repositorio.
 - Define `CLIENT_URL` con la dirección real de la interfaz y sirve todo por HTTPS.
 - Si la API va detrás de un proxy inverso, define `TRUST_PROXY=1` (número de proxies); si no, todos los usuarios compartirían contador de intentos.
 - Con varias instancias de la API (por ejemplo en Cloud Run), el límite de intentos y las cuotas de IA no se comparten: usa un almacén común (p. ej. Redis).
 - Borra `ADMIN_PASSWORD` de `backend/.env` tras crear el administrador.
 - Guarda `JWT_SECRET`, la clave de IA y la contraseña de la base en un gestor de secretos, no en el repositorio.
-- En un servicio gestionado (Cloud SQL, RDS…), ejecuta `npm run db:setup` una vez apuntando a esa base: carga el SQL en UTF-8 y evita los problemas de codificación.
+- En una base PostgreSQL gestionada, ejecuta `npm run db:setup` una vez apuntando a esa base. El script prepara el esquema y carga ejemplos sin borrar datos existentes.
+
+## Despliegue gratuito (GitHub Pages + Render + Neon)
+
+El frontend estático se publica en GitHub Pages; la API Express se ejecuta en Render; Neon aloja PostgreSQL. GitHub Pages no puede ejecutar el backend ni la base de datos.
+
+1. Crea una base de datos en [Neon](https://neon.tech/), activa **Connection pooling** y copia la cadena de conexión pooled PostgreSQL (la dirección del host suele incluir `-pooler`).
+2. En `backend/.env`, define `DATABASE_URL`, `ADMIN_NAME`, `ADMIN_EMAIL` y una contraseña fuerte para `ADMIN_PASSWORD`. Ejecuta `npm run db:setup` desde la raíz para crear el esquema, el administrador y las guías de ejemplo en Neon. No se copian datos que estén en tu antigua base MySQL.
+3. En Render, crea un Blueprint desde el repositorio usando [`render.yaml`](./render.yaml). Configura `DATABASE_URL` con la cadena de Neon y `CLIENT_URL` con el origen de GitHub Pages, por ejemplo `https://feliperoma04.github.io`. Render genera `JWT_SECRET`.
+4. En GitHub, crea la variable de repositorio `VITE_API_URL` con la URL de la API de Render seguida de `/api`, por ejemplo `https://soporte-web-api.onrender.com/api`.
+5. En **Settings → Pages**, selecciona **GitHub Actions** como origen. Al subir cambios a `main`, [el workflow](./.github/workflows/deploy-pages.yml) compila el frontend y lo publica en Pages.
+
+Los niveles gratuitos tienen límites. El servicio gratuito de Render puede tardar en despertar tras un periodo sin actividad; Neon también aplica límites de uso. La IA es opcional y el proveedor de IA podría tener sus propios costes o límites.

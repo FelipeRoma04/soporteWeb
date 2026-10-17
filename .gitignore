@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+.env.local
+.neon
 .tools/
 *.log
 .DS_Store
