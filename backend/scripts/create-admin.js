@@ -21,7 +21,7 @@ export async function ensureAdmin({ name, email, password, resetPassword = false
   if (existing) {
     if (resetPassword) {
       if (!password || password.length < 8) throw new Error('Para cambiar la contraseña indica una de al menos 8 caracteres.');
-      await pool.execute('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?', [await bcrypt.hash(password, 12), existing.id]);
+      await pool.query('UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2', [await bcrypt.hash(password, 12), existing.id]);
     }
     if (existing.role === 'admin') return { status: resetPassword ? 'password-reset' : 'already-admin', email: normalizedEmail };
     await userModel.updateRole(existing.id, 'admin');
@@ -55,7 +55,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(result.status === 'skipped' ? '✖ Indica un correo: --email o ADMIN_EMAIL en backend/.env' : `✔ ${adminMessages[result.status](result.email)}`);
     if (result.status === 'skipped') process.exitCode = 1;
   } catch (error) {
-    console.error(`✖ ${error.code === 'ECONNREFUSED' ? 'No se pudo conectar a MySQL. ¿Está iniciado?' : error.message}`);
+    console.error(`✖ ${error.code === 'ECONNREFUSED' ? 'No se pudo conectar a PostgreSQL. Revisa DATABASE_URL o la configuración DB_*.' : error.message}`);
     process.exitCode = 1;
   } finally {
     await pool.end();

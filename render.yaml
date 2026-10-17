@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: soporte-web-api
+    runtime: node
+    plan: free
+    healthCheckPath: /api/health
+    buildCommand: npm ci --prefix backend --omit=dev
+    startCommand: npm --prefix backend start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_URL
+        sync: false

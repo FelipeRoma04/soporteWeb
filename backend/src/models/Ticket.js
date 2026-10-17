@@ -18,18 +18,31 @@ const SELECT_WITH_REQUESTER = 'SELECT t.*, u.name AS requester_name, u.role AS r
 
 export async function findTicketsForUser(user) {
   const isStaff = STAFF_ROLES.includes(user.role);
-  const [rows] = await pool.execute(
-    `${SELECT_WITH_REQUESTER} ${isStaff ? '' : 'WHERE t.user_id = ?'} ORDER BY t.created_at DESC`,
+  const { rows } = await pool.query(
+    `${SELECT_WITH_REQUESTER} ${isStaff ? '' : 'WHERE t.user_id = $1'} ORDER BY t.created_at DESC`,
     isStaff ? [] : [user.id]
   );
   return rows;
 }
 export async function createTicket(ticket, userId) {
-  const [result] = await pool.execute('INSERT INTO tickets (user_id, subject, description, category, priority) VALUES (?, ?, ?, ?, ?)', [userId, ticket.subject, ticket.description, ticket.category, ticket.priority]);
-  const [rows] = await pool.execute(`${SELECT_WITH_REQUESTER} WHERE t.id = ?`, [result.insertId]);
+  const { rows: inserted } = await pool.query(
+    'INSERT INTO tickets (user_id, subject, description, category, priority) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [userId, ticket.subject, ticket.description, ticket.category, ticket.priority]
+  );
+  const { rows } = await pool.query(`${SELECT_WITH_REQUESTER} WHERE t.id = $1`, [inserted[0].id]);
   return rows[0];
 }
-export async function findTicketById(ticketId) { const [rows] = await pool.execute('SELECT * FROM tickets WHERE id = ?', [ticketId]); return rows[0]; }
-export async function updateStatus(ticketId, status, agentId) { await pool.execute('UPDATE tickets SET status = ?, assigned_to = COALESCE(assigned_to, ?) WHERE id = ?', [status, agentId, ticketId]); }
-export async function addComment(ticketId, userId, body) { const [result] = await pool.execute('INSERT INTO comments (ticket_id, user_id, body) VALUES (?, ?, ?)', [ticketId, userId, body]); const [rows] = await pool.execute('SELECT c.*, u.name AS author_name FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?', [result.insertId]); return rows[0]; }
-export async function findComments(ticketId) { const [rows] = await pool.execute('SELECT c.*, u.name AS author_name FROM comments c JOIN users u ON u.id = c.user_id WHERE c.ticket_id = ? ORDER BY c.created_at ASC', [ticketId]); return rows; }
+export async function findTicketById(ticketId) { const { rows } = await pool.query('SELECT * FROM tickets WHERE id = $1', [ticketId]); return rows[0]; }
+export async function updateStatus(ticketId, status, agentId) { await pool.query('UPDATE tickets SET status = $1, assigned_to = COALESCE(assigned_to, $2) WHERE id = $3', [status, agentId, ticketId]); }
+export async function addComment(ticketId, userId, body) {
+  const { rows: inserted } = await pool.query(
+    'INSERT INTO comments (ticket_id, user_id, body) VALUES ($1, $2, $3) RETURNING id',
+    [ticketId, userId, body]
+  );
+  const { rows } = await pool.query(
+    'SELECT c.*, u.name AS author_name FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = $1',
+    [inserted[0].id]
+  );
+  return rows[0];
+}
+export async function findComments(ticketId) { const { rows } = await pool.query('SELECT c.*, u.name AS author_name FROM comments c JOIN users u ON u.id = c.user_id WHERE c.ticket_id = $1 ORDER BY c.created_at ASC', [ticketId]); return rows; }

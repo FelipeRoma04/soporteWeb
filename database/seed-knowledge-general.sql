@@ -1,15 +1,10 @@
-SET NAMES utf8mb4;
-
-SET @knowledge_author_id = (
+WITH knowledge_author AS (
   SELECT id
   FROM users
   ORDER BY CASE role WHEN 'admin' THEN 1 WHEN 'agent' THEN 2 ELSE 3 END, id
   LIMIT 1
-);
-
-INSERT INTO knowledge_articles (author_id, title, content, category, keywords)
-SELECT @knowledge_author_id, seed.title, seed.content, seed.category, seed.keywords
-FROM (
+),
+seed AS (
   SELECT 'Problemas para iniciar sesión en Microsoft Teams' AS title, '1. Confirma que el equipo tiene conexión a Internet y que puedes abrir otros sitios de trabajo. 2. Revisa que estás usando la cuenta laboral correcta y vuelve a escribir la contraseña sin compartirla con nadie. 3. Cierra Teams por completo, ábrelo de nuevo e intenta iniciar sesión. 4. Si la cuenta está bloqueada, la autenticación multifactor falla o el problema persiste, solicita ayuda e indica el mensaje de error exacto. Usa siempre el portal oficial de autoservicio de tu organización para recuperar la cuenta.' AS content, 'Colaboración' AS category, 'Teams, inicio de sesión, acceso, contraseña, cuenta laboral' AS keywords
   UNION ALL SELECT 'Problemas de cámara, micrófono o audio en Teams', '1. Comprueba que la cámara o el micrófono no estén cubiertos, silenciados ni desconectados. 2. En la configuración de dispositivos de Teams, selecciona el micrófono, altavoz y cámara correctos y utiliza la prueba disponible. 3. Cierra otras aplicaciones que puedan estar usando la cámara o el audio. 4. Desconecta y vuelve a conectar el dispositivo externo o prueba los dispositivos integrados. 5. Reinicia Teams. Si persiste, anota el modelo del dispositivo, la aplicación afectada y si el problema ocurre en todas las reuniones.' , 'Colaboración', 'Teams, cámara, micrófono, audio, altavoz, reunión' 
   UNION ALL SELECT 'No puedo entrar a una reunión de Teams', '1. Abre el enlace desde Teams o el calendario laboral y comprueba que estás en la cuenta correcta. 2. Verifica la fecha y hora del equipo y la conexión a Internet. 3. Si aparece una sala de espera, espera a que el organizador admita tu entrada. 4. Comprueba si la reunión requiere una cuenta o permiso específico. 5. Si el enlace indica que la reunión no existe o no tienes permiso, contacta al organizador y comparte el mensaje mostrado sin incluir códigos de acceso privados.' , 'Colaboración', 'Teams, reunión, enlace, sala de espera, permiso, calendario' 
@@ -36,8 +31,10 @@ FROM (
   UNION ALL SELECT 'El equipo no enciende', 'Comprueba que el adaptador de corriente esté conectado a una toma que funcione y que sus conexiones estén firmes. Si es un portátil, déjalo conectado unos minutos y revisa si aparece algún indicador de carga. Desconecta accesorios no esenciales y prueba el encendido una vez más. Si notas olor a quemado, líquido, batería hinchada o calor inusual, deja de usarlo y contacta a soporte de inmediato. No abras el equipo ni retires la batería si no estás autorizado.' , 'Hardware', 'equipo no enciende, portátil, batería, cargador, alimentación' 
   UNION ALL SELECT 'Cómo proteger información sensible al trabajar', 'Usa solo cuentas, equipos, aplicaciones y ubicaciones aprobadas por tu organización. Bloquea la pantalla cuando te alejes y guarda documentos en el espacio corporativo autorizado. No compartas contraseñas, códigos MFA, claves de recuperación ni enlaces con acceso abierto. Antes de enviar archivos, confirma destinatarios y permisos. Reporta de inmediato una exposición accidental, pérdida de equipo o solicitud inusual de acceso. Sigue las políticas internas cuando sean más específicas que esta guía general.' , 'Seguridad', 'información sensible, privacidad, contraseña, permisos, datos' 
   UNION ALL SELECT 'Cómo compartir la pantalla de forma segura en una reunión', 'Antes de compartir, cierra documentos, conversaciones y notificaciones que no deban ver los participantes. Siempre que sea posible comparte solo la ventana necesaria en lugar de todo el escritorio. Comprueba que seleccionaste la reunión correcta y detén la compartición al terminar. No muestres contraseñas, datos personales, información de clientes ni material confidencial a personas sin autorización.' , 'Colaboración', 'compartir pantalla, Teams, reunión, privacidad, escritorio' 
-) AS seed
-WHERE @knowledge_author_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM knowledge_articles existing WHERE existing.title = seed.title
-  );
+)
+INSERT INTO knowledge_articles (author_id, title, content, category, keywords)
+SELECT knowledge_author.id, seed.title, seed.content, seed.category, seed.keywords
+FROM knowledge_author CROSS JOIN seed
+WHERE NOT EXISTS (
+  SELECT 1 FROM knowledge_articles existing WHERE existing.title = seed.title
+);
