@@ -56,8 +56,8 @@ export default function TicketDetail({ ticket, user, canManage = false, onStatus
     }
   }
 
-  return <div className="modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <div className="modal-panel" role="dialog" aria-modal="true" aria-label={`Ticket ${ticket.id}`} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+  return <div className="modal-backdrop ticket-detail-backdrop" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="modal-panel ticket-detail-panel" role="dialog" aria-modal="true" aria-label={`Ticket ${ticket.id}`} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
       <div className="modal-heading">
         <div><span className="eyebrow">{ticket.id} · {String(ticket.status).toUpperCase()}</span><h2>{ticket.subject}</h2></div>
         <button type="button" className="close-button" onClick={onClose} aria-label="Cerrar">×</button>
@@ -65,11 +65,11 @@ export default function TicketDetail({ ticket, user, canManage = false, onStatus
       <p className="muted">{ticket.category} · Prioridad {ticket.priority} · {ticket.date}</p>
       {ticket.requester_name && <p className="muted">Solicitante: <strong>{ticket.requester_name}</strong> · {formatRole(ticket.requester_role)}</p>}
       {canManage && <div style={{ margin: '12px 0' }}><StatusPicker value={ticket.status} onChange={(status) => onStatusChange(ticket.dbId, status)} /></div>}
-      <p style={{ whiteSpace: 'pre-wrap', fontSize: 14 }}>{ticket.description}</p>
+      <p className="ticket-description" style={{ whiteSpace: 'pre-wrap', fontSize: 14 }}>{ticket.description}</p>
       {history.length > 0 && <details style={{ margin: '12px 0' }}>
         <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Historial ({history.length})</summary>
-        <ol style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'grid', gap: 8, fontSize: 13 }}>
-          {history.map((entry) => <li key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, borderLeft: '2px solid #e87946', paddingLeft: 10 }}>
+        <ol className="ticket-history-list" style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'grid', gap: 8, fontSize: 13 }}>
+          {history.map((entry) => <li className="ticket-history-item" key={entry.id}>
             <span><strong>{entry.action}</strong><span className="muted"> · {entry.user_name}</span></span>
             <span className="muted">{formatDate(entry.created_at)}</span>
           </li>)}
