@@ -62,11 +62,21 @@ Los errores se lanzan con un `status` HTTP y los recoge `errorHandler`; cualquie
 ├── package.json              Scripts de la raíz: setup, dev, db:up, db:setup, create-admin, build
 ├── package-lock.json
 ├── docker-compose.yml        PostgreSQL 16 para desarrollo (puerto 5433 del equipo)
+├── render.yaml               Blueprint de Render: despliegue de la API (backend)
+├── neon.ts                   Configuración de la CLI de Neon (ramas); la app no lo usa
+├── skills-lock.json          Versiones de las skills de Neon para asistentes de IA
 ├── .gitignore                Excluye .env, node_modules, dist y copias de seguridad
+├── .github/
+│   └── workflows/
+│       └── deploy-pages.yml  Compila el frontend y lo publica en GitHub Pages
+├── .agents/skills/           Documentación de Neon para asistentes de IA (no es parte de la app)
+├── .vscode/
+│   └── mcp.json              Conexión de VS Code al servidor MCP de Neon (herramienta de desarrollo)
 │
 ├── backend/                  API REST (Node.js + Express)
-│   ├── Dockerfile            Imagen de producción (Cloud Run)
+│   ├── Dockerfile            Imagen opcional para otro host con contenedores (hoy el despliegue usa Render sin Docker)
 │   ├── .dockerignore         Mantiene .env y node_modules fuera de la imagen
+│   ├── .gitignore            Refuerza que .env no se versione
 │   ├── .env.example          Plantilla de variables de entorno (el .env real no se sube)
 │   ├── package.json
 │   ├── package-lock.json
@@ -88,12 +98,12 @@ Los errores se lanzan con un `status` HTTP y los recoge `errorHandler`; cualquie
 │                               Category · Knowledge · AIInteraction · Role
 │
 ├── frontend/                 Interfaz (React 18 + Vite)
-│   ├── Dockerfile            Compila con Vite y sirve con nginx (Cloud Run)
+│   ├── Dockerfile            Imagen opcional con nginx (hoy el frontend se publica en GitHub Pages)
 │   ├── .dockerignore
 │   ├── nginx.conf.template   Configuración de nginx (SPA, caché, puerto ${PORT})
-│   ├── .env.example          VITE_API_URL: dirección de la API (se fija al compilar)
+│   ├── .env.example          VITE_API_URL (dirección de la API) y VITE_BASE_PATH (ruta de Pages); se fijan al compilar
 │   ├── index.html
-│   ├── vite.config.js
+│   ├── vite.config.js        Usa VITE_BASE_PATH como `base` (GitHub Pages sirve en /<repositorio>/)
 │   ├── package.json
 │   ├── package-lock.json
 │   └── src/
@@ -224,7 +234,7 @@ Inicia sesión con `ADMIN_EMAIL` y `ADMIN_PASSWORD`. Las demás personas se regi
 
 ### Volver a preparar el esquema
 
-`npm run db:setup` se puede repetir: crea los objetos que falten y añade las guías de ejemplo que no existan, sin borrar datos. Las versiones anteriores usaban MySQL; sus tablas y datos no se migran automáticamente a PostgreSQL.
+`npm run db:setup` se puede repetir: crea los objetos que falten y añade las guías de ejemplo que no existan, sin borrar datos. Las versiones anteriores usaban MySQL; sus tablas y datos no se migran automáticamente a PostgreSQL. Si tenías el contenedor MySQL antiguo (`soporteweb-db`), elimínalo antes de levantar el nuevo: `docker rm -f soporteweb-db`, y después `npm run db:up`.
 
 ---
 
@@ -273,6 +283,10 @@ El rol se lee de la base de datos en cada petición, así que un cambio surte ef
 | Te saca al login de repente | La sesión dura 8 horas, o cambiaron la contraseña de tu cuenta (cierra todas las sesiones). Vuelve a entrar |
 | *Demasiados intentos de inicio de sesión* | Tras 5 fallos con el mismo correo y equipo se bloquea 15 minutos |
 | Aviso `DEP0040 punycode` al arrancar | Es inofensivo (viene de una dependencia) |
+| `container name "/soporteweb-db" is already in use` | Queda el contenedor MySQL de la versión anterior: `docker rm -f soporteweb-db` y luego `npm run db:up` |
+| VS Code marca error en `neon.ts` (*Cannot find module `@neon/config/v1`*, `branch` implícito) | Faltan las dependencias de la raíz: ejecuta `npm install` en la carpeta principal y reinicia el servidor de TypeScript (*Ctrl+Shift+P → TypeScript: Restart TS Server*). `neon.ts` solo lo usa la CLI de Neon; la aplicación no lo necesita |
+| En producción, la primera petición tarda o falla | El plan gratuito de Render duerme la API tras un rato sin uso: espera unos segundos y reintenta |
+| La interfaz en Pages carga pero no deja entrar (error de red o CORS) | En Render, `CLIENT_URL` debe ser el origen de Pages **sin ruta**: `https://feliperoma04.github.io`. Comprueba también la variable `VITE_API_URL` del repositorio |
 
 ---
 
@@ -291,12 +305,21 @@ El rol se lee de la base de datos en cada petición, así que un cambio surte ef
 - Usa una cadena `DATABASE_URL` privada y no la guardes en el repositorio.
 - Define `CLIENT_URL` con la dirección real de la interfaz y sirve todo por HTTPS.
 - Si la API va detrás de un proxy inverso, define `TRUST_PROXY=1` (número de proxies); si no, todos los usuarios compartirían contador de intentos.
-- Con varias instancias de la API (por ejemplo en Cloud Run), el límite de intentos y las cuotas de IA no se comparten: usa un almacén común (p. ej. Redis).
+- Con varias instancias de la API (por ejemplo en Render con varias réplicas), el límite de intentos y las cuotas de IA no se comparten: usa un almacén común (p. ej. Redis).
 - Borra `ADMIN_PASSWORD` de `backend/.env` tras crear el administrador.
 - Guarda `JWT_SECRET`, la clave de IA y la contraseña de la base en un gestor de secretos, no en el repositorio.
 - En una base PostgreSQL gestionada, ejecuta `npm run db:setup` una vez apuntando a esa base. El script prepara el esquema y carga ejemplos sin borrar datos existentes.
 
 ## Despliegue gratuito (GitHub Pages + Render + Neon)
+
+**En línea:**
+
+| Servicio | Dirección |
+|---|---|
+| Interfaz (GitHub Pages) | <https://feliperoma04.github.io/soporteWeb/> |
+| API (Render) · diagnóstico | <https://soporte-web-api.onrender.com/api/health> |
+| Base de datos | Neon (PostgreSQL), accesible solo con su cadena de conexión |
+
 
 El frontend estático se publica en GitHub Pages; la API Express se ejecuta en Render; Neon aloja PostgreSQL. GitHub Pages no puede ejecutar el backend ni la base de datos.
 
@@ -307,3 +330,25 @@ El frontend estático se publica en GitHub Pages; la API Express se ejecuta en R
 5. En **Settings → Pages**, selecciona **GitHub Actions** como origen. Al subir cambios a `main`, [el workflow](./.github/workflows/deploy-pages.yml) compila el frontend y lo publica en Pages.
 
 Los niveles gratuitos tienen límites. El servicio gratuito de Render puede tardar en despertar tras un periodo sin actividad; Neon también aplica límites de uso. La IA es opcional y el proveedor de IA podría tener sus propios costes o límites.
+
+### Crear o promover un administrador en producción
+
+Cualquier persona que se registra en la interfaz queda con rol **Usuario**. El primer administrador se crea fuera de la aplicación, con acceso a la base de Neon. Hay dos formas:
+
+1. **Con la consola SQL de Neon** (la más rápida). Quien tenga acceso al proyecto, tras registrarse la cuenta en la interfaz, ejecuta:
+
+   ```sql
+   UPDATE users SET role = 'admin', token_version = token_version + 1 WHERE email = 'correo@ejemplo.com';
+   ```
+
+   La persona debe cerrar sesión y volver a entrar.
+
+2. **Con el script del proyecto.** Desde la raíz, con `DATABASE_URL` de Neon en `backend/.env` o en la terminal:
+
+   ```bash
+   npm --prefix backend run create-admin -- --email correo@ejemplo.com --name "Nombre" --password "clave-de-8-o-mas"
+   ```
+
+   Si la cuenta ya existe, la promueve; si no, la crea. Añade `--reset-password` para cambiar su contraseña.
+
+La cadena de conexión de Neon es un secreto: compártela solo por un canal privado y no la subas al repositorio.
