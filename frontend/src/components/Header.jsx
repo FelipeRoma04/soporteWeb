@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, CheckCheck, LogOut, Search, X } from 'lucide-react';
+import { formatRole } from '../utils/roles.js';
 
 const formatDate = (value) => new Date(value).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 // En estas pantallas la propia tabla ya se filtra al escribir; en las demás, el buscador muestra una lista de resultados.
@@ -32,8 +33,8 @@ export default function Header({ active, search, onSearch, onSearchSubmit, searc
   }
 
   return <header className="topbar">
-    <div><div className="crumb">Soporte / {active}</div><h1>{active}</h1></div>
-    <div className="top-actions">
+    <div><div className="crumb">SysPulse / {active}</div><h1>{active}</h1></div>
+    <div className="top-actions" role="group" aria-label="Acciones de la cuenta">
       <div className="search-wrap" ref={searchRef}>
         <div className="search-box">
           <Search size={17} />
@@ -58,7 +59,10 @@ export default function Header({ active, search, onSearch, onSearchSubmit, searc
         </div>}
       </div>
       <button className="icon-button" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={onLogout}><LogOut size={18} /></button>
-      <div className="mini-avatar">{user?.name?.slice(0, 2).toUpperCase() || 'MC'}</div>
+      <div className="header-user" title={user?.name || 'Cuenta'}>
+        <div className="mini-avatar" aria-hidden="true">{user?.name?.slice(0, 2).toUpperCase() || 'U'}</div>
+        <div className="header-user-copy"><strong>{user?.name}</strong><small>{formatRole(user?.role)}</small></div>
+      </div>
     </div>
   </header>;
 }

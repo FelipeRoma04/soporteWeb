@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Activity, BookOpen, Bot, Plus, Search, Ticket, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { BookOpen, Bot, Plus, Search, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { createCategory, getCategories, getDashboard, getUsers, updateUserRole, updateUserStatus } from './api.js';
 import { analyzeTicket, askAssistant, sendAssistantFeedback } from './services/aiService.js';
 import { createKnowledge, getKnowledge } from './services/knowledgeService.js';
@@ -8,6 +8,7 @@ import { getNotifications, markAllNotificationsAsRead, markNotificationAsRead } 
 import { useAuth } from './context/AuthContext.jsx';
 import MainLayout from './layouts/MainLayout.jsx';
 import StatusPicker from './components/StatusPicker.jsx';
+import Dashboard from './pages/Dashboard.jsx';
 import { formatRole } from './utils/roles.js';
 import Login from './pages/Login.jsx';
 import Users from './pages/Users.jsx';
@@ -32,6 +33,7 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loadError, setLoadError] = useState('');
+  const [dataLoading, setDataLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState(null);
@@ -57,6 +59,7 @@ export default function App() {
 
   useEffect(() => {
     if (!authenticated || !ready) return;
+    setDataLoading(true);
     Promise.all([getTickets(), getDashboard(), getKnowledge(), getNotifications(), getCategories(), user?.role === 'admin' ? getUsers() : Promise.resolve({ data: [] })])
       .then(([ticketsResponse, dashboardResponse, articlesResponse, notificationsResponse, categoriesResponse, usersResponse]) => {
         setTickets(ticketsResponse.data.map(formatTicket));
@@ -67,7 +70,8 @@ export default function App() {
         setUsers(usersResponse.data);
         setLoadError('');
       })
-      .catch(() => setLoadError('No se pudieron cargar los datos de la base de datos.'));
+      .catch(() => setLoadError('No se pudieron cargar los datos de la base de datos.'))
+      .finally(() => setDataLoading(false));
   }, [authenticated, ready]);
 
   // La campana y la lista se actualizan solas cada minuto (tickets nuevos, comentarios, cambios de estado).
@@ -152,36 +156,59 @@ export default function App() {
 
   return <MainLayout active={active} search={search} onSearch={setSearch} onSearchSubmit={() => setActive('Mis tickets')} searchResults={filtered} onOpenTicket={setSelectedTicketId} user={user} onLogout={logout} notifications={notifications} onReadNotification={readNotification} onReadAllNotifications={readAllNotifications} onNavigate={setActive}>
       {notice && <div className="notice"><span>✓</span>{notice}</div>}
-      {loadError && <div className="notice auth-error">{loadError}</div>}
-      {active === 'Resumen' && <Dashboard onNew={() => setShowForm(true)} tickets={filtered} stats={stats} user={user} canManageTickets={canManageTickets} onStatusChange={changeTicketStatus} onOpen={setSelectedTicketId} onViewAll={() => setActive('Mis tickets')} />}
+      {loadError ? <section className="page-body app-page-state" role="alert">
+        <div className="panel empty-state">
+          <h2>No se pudo cargar el espacio de trabajo</h2>
+          <p>{loadError}</p>
+          <button type="button" className="secondary-button" onClick={() => window.location.reload()}>Reintentar</button>
+        </div>
+      </section> : dataLoading ? <section className="page-body app-page-state" role="status" aria-live="polite" aria-busy="true">
+        <div className="panel empty-state">
+          <span className="app-loading-indicator" aria-hidden="true" />
+          <h2>Cargando tu espacio de trabajo</h2>
+          <p>Estamos preparando tus tickets, estadísticas y notificaciones.</p>
+        </div>
+      </section> : <>
+      {active === 'Resumen' && <Dashboard onNew={() => setShowForm(true)} stats={stats} user={user}>
+        <div className="content-grid">
+          <div className="panel ticket-panel">
+            <PanelHeader title="Actividad reciente" action="Ver todos" onAction={() => setActive('Mis tickets')} />
+            <div className="table-wrap"><TicketTable tickets={filtered.slice(0, 5)} canManageTickets={canManageTickets} onStatusChange={changeTicketStatus} onOpen={setSelectedTicketId} /></div>
+          </div>
+          <div className="panel insight-panel">
+            <PanelHeader title="¿Necesitas ayuda?" />
+            <div className="insight-graphic"><div className="graphic-ring">?</div></div>
+            <p className="insight-copy">Describe tu problema y nuestra IA te ayudará a encontrar una solución más rápido.</p>
+            <button className="secondary-button" onClick={() => setActive('Asistente IA')}><Bot size={16} />Abrir Asistente IA <span>→</span></button>
+          </div>
+        </div>
+      </Dashboard>}
       {active === 'Mis tickets' && <TicketList tickets={filtered} onNew={() => setShowForm(true)} canManageTickets={canManageTickets} onStatusChange={changeTicketStatus} onOpen={setSelectedTicketId} />}
       {active === 'Base de conocimiento' && <Knowledge articles={articles} categories={categories} isAdmin={user?.role === 'admin'} onCreate={async (article) => { const response = await createKnowledge(article); setArticles((current) => [response.data, ...current]); }} />}
       {active === 'Asistente IA' && <Assistant categories={categories} onTicketCreated={refreshTicketData} />}
       {active === 'Usuarios' && user?.role === 'admin' && <Users users={users} currentUserId={user.id} onRoleChange={changeUserRole} onStatusChange={changeUserStatus} />}
       {active === 'Categorías' && user?.role === 'admin' && <CategoryManagement categories={categories} onCreate={async (name) => { const response = await createCategory(name); setCategories((current) => [...current, response.data].sort((first, second) => first.name.localeCompare(second.name))); }} />}
       {active === 'Configuración' && <Settings user={user} />}
-    {showForm && <div className="modal-backdrop"><form className="modal-panel" onSubmit={addTicket}><div className="modal-heading"><div><span className="eyebrow">NUEVA SOLICITUD</span><h2>Crear ticket</h2></div><button type="button" className="close-button" onClick={() => setShowForm(false)}>×</button></div><label>Asunto<input name="subject" required placeholder="¿En qué podemos ayudarte?" /></label><label>Categoría<select name="category" defaultValue="General">{ticketCategories.map((name) => <option key={name}>{name}</option>)}</select></label><label>Prioridad<select name="priority"><option>Media</option><option>Alta</option><option>Baja</option><option>Urgente</option></select></label><label>Descripción<textarea name="description" required rows="4" placeholder="Describe el problema con el mayor detalle posible..." /></label><button className="primary-button" type="submit">Enviar ticket <span>→</span></button></form></div>}
+      {showForm && <div className="modal-backdrop"><form className="modal-panel" onSubmit={addTicket}><div className="modal-heading"><div><span className="eyebrow">NUEVA SOLICITUD</span><h2>Crear ticket</h2></div><button type="button" className="close-button" onClick={() => setShowForm(false)}>×</button></div><label>Asunto<input name="subject" required placeholder="¿En qué podemos ayudarte?" /></label><label>Categoría<select name="category" defaultValue="General">{ticketCategories.map((name) => <option key={name}>{name}</option>)}</select></label><label>Prioridad<select name="priority"><option>Media</option><option>Alta</option><option>Baja</option><option>Urgente</option></select></label><label>Descripción<textarea name="description" required rows="4" placeholder="Describe el problema con el mayor detalle posible..." /></label><button className="primary-button" type="submit">Enviar ticket <span>→</span></button></form></div>}
     {selectedTicket && <TicketDetail ticket={selectedTicket} user={user} canManage={canManageTickets} onStatusChange={changeTicketStatus} onClose={() => setSelectedTicketId(null)} />}
+      </>}
   </MainLayout>;
 }
 
-function Dashboard({ onNew, tickets, stats, user, canManageTickets, onStatusChange, onOpen, onViewAll }) { return <section className="page-body"><div className="welcome-row"><div><p className="eyebrow">RESUMEN DE SOPORTE</p><h2>Hola, {user?.name} <span className="wave">✦</span></h2><p className="muted">Aquí tienes un resumen de tus solicitudes.</p></div><button className="primary-button" onClick={onNew}><Plus size={17} />Nuevo ticket</button></div><div className="stat-grid"><Stat label="Total de tickets" value={stats.total || 0} trend="Registrados en la base" icon={<Ticket />} /><Stat label="Abiertos" value={stats.open || 0} trend="Nuevos tickets" icon={<Activity />} color="blue" /><Stat label="Pendientes" value={stats.pending || 0} trend="En progreso" icon={<Activity />} color="orange" /><Stat label="Resueltos" value={stats.closed || 0} trend={stats.average_resolution_hours ? `${stats.average_resolution_hours} h promedio` : 'Tickets cerrados'} icon={<span className="check-icon">✓</span>} color="green" /></div><div className="chart-grid"><Chart title="Tickets por categoría" items={stats.categories || []} labelKey="category" /><Chart title="Tickets por prioridad" items={stats.priorities || []} labelKey="priority" /></div><div className="content-grid"><div className="panel ticket-panel"><PanelHeader title="Actividad reciente" action="Ver todos" onAction={onViewAll} /><div className="table-wrap"><TicketTable tickets={tickets.slice(0, 5)} canManageTickets={canManageTickets} onStatusChange={onStatusChange} onOpen={onOpen} /></div></div><div className="panel insight-panel"><PanelHeader title="Necesitas ayuda?" /><div className="insight-graphic"><div className="graphic-ring">?</div></div><p className="insight-copy">Describe tu problema y nuestra IA te ayudará a encontrar una solución más rápido.</p><button className="secondary-button" onClick={onNew}>Consultar soporte <span>→</span></button></div></div></section>; }
-function Chart({ title, items, labelKey }) { const max = Math.max(...items.map((item) => Number(item.total)), 1); return <div className="panel chart-panel"><h3>{title}</h3>{items.length ? items.map((item) => <div className="bar-row" key={item[labelKey]}><span>{item[labelKey]}</span><div className="bar-track"><i style={{ width: `${Number(item.total) / max * 100}%` }} /></div><strong>{item.total}</strong></div>) : <p className="muted">Aún no hay datos.</p>}</div>; }
-function Stat({ label, value, trend, icon, color = 'orange' }) { return <div className="stat-card"><div className={`stat-icon ${color}`}>{icon}</div><div><p>{label}</p><strong>{value}</strong><small className={color === 'green' ? 'positive' : ''}>{trend}</small></div></div>; }
 function PanelHeader({ title, action, onAction }) { return <div className="panel-header"><h3>{title}</h3>{action && <button className="text-button" onClick={onAction}>{action} →</button>}</div>; }
 function TicketList({ tickets, onNew, canManageTickets, onStatusChange, onOpen }) { return <section className="page-body"><div className="welcome-row"><div><p className="eyebrow">SEGUIMIENTO</p><h2>{canManageTickets ? 'Gestión de tickets' : 'Mis tickets'}</h2><p className="muted">{canManageTickets ? 'Revisa y actualiza las solicitudes de todos los usuarios.' : 'Consulta el avance de tus solicitudes.'}</p></div><button className="primary-button" onClick={onNew}><Plus size={17} />Nuevo ticket</button></div><div className="panel ticket-panel"><div className="table-wrap"><TicketTable tickets={tickets} canManageTickets={canManageTickets} onStatusChange={onStatusChange} onOpen={onOpen} /></div></div></section>; }
 function TicketTable({ tickets, canManageTickets, onStatusChange, onOpen }) {
-  return <table>
+  return <table className="ticket-table">
     <thead><tr><th>Ticket</th><th>Asunto</th>{canManageTickets && <th>Solicitante</th>}<th>Categoría</th><th>Prioridad</th><th>Estado</th><th>Fecha</th></tr></thead>
-    <tbody>{tickets.map((ticket) => <tr key={ticket.id}>
-      <td><strong className="ticket-id">{ticket.id}</strong></td>
-      <td><button type="button" className="text-button" title="Ver detalle y comentarios" onClick={() => onOpen(ticket.dbId)}>{ticket.subject}</button></td>
-      {canManageTickets && <td><strong>{ticket.requester_name}</strong><small className="muted" style={{ display: 'block' }}>{formatRole(ticket.requester_role)}</small></td>}
-      <td><span className="category-dot" />{ticket.category}</td>
-      <td><Badge tone={priorityTone(ticket.priority)}>{ticket.priority}</Badge></td>
-      <td>{canManageTickets ? <StatusPicker value={ticket.status} onChange={(status) => onStatusChange(ticket.dbId, status)} /> : <Badge tone={statusTone(ticket.status)}>{ticket.status}</Badge>}</td>
-      <td className="muted">{ticket.date}</td>
-    </tr>)}</tbody>
+    <tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.id}>
+      <td data-label="Ticket"><strong className="ticket-id">{ticket.id}</strong></td>
+      <td data-label="Asunto"><button type="button" className="text-button" title="Ver detalle y comentarios" onClick={() => onOpen(ticket.dbId)}>{ticket.subject}</button></td>
+      {canManageTickets && <td data-label="Solicitante"><strong>{ticket.requester_name}</strong><small className="muted" style={{ display: 'block' }}>{formatRole(ticket.requester_role)}</small></td>}
+      <td data-label="Categoría"><span className="category-dot" />{ticket.category}</td>
+      <td data-label="Prioridad"><Badge tone={priorityTone(ticket.priority)}>{ticket.priority}</Badge></td>
+      <td data-label="Estado">{canManageTickets ? <StatusPicker value={ticket.status} onChange={(status) => onStatusChange(ticket.dbId, status)} /> : <Badge tone={statusTone(ticket.status)}>{ticket.status}</Badge>}</td>
+      <td data-label="Fecha" className="muted">{ticket.date}</td>
+    </tr>) : <tr className="table-empty-row"><td colSpan={canManageTickets ? 7 : 6}>No hay tickets que mostrar.</td></tr>}</tbody>
   </table>;
 }
 function Knowledge({ articles, categories, isAdmin, onCreate }) {
@@ -225,7 +252,7 @@ function Knowledge({ articles, categories, isAdmin, onCreate }) {
       <button className="primary-button" disabled={saving || !categories.length}>{saving ? 'Guardando...' : 'Guardar documento'} <span>→</span></button>
     </form>}
     <div className="article-grid">{visibleArticles.map((article) => <article className="article-card" key={article.id}><div className="article-icon"><BookOpen size={20} /></div><Badge tone="blue">{article.category}</Badge><h3>{article.title}</h3><p>Actualizado: {new Date(article.updated_at || Date.now()).toLocaleDateString('es-ES')}</p><button className="text-button" onClick={() => setOpenArticle(article)}>Leer artículo →</button></article>)}</div>
-    {!visibleArticles.length && <div className="panel empty-state"><BookOpen size={24} /><h3>No hay documentos todavía</h3><p className="muted">{isAdmin ? 'Carga el primer documento para ayudar a tu equipo.' : 'El administrador aún no ha publicado soluciones.'}</p></div>}
+    {!visibleArticles.length && <div className="panel empty-state"><BookOpen size={24} /><h3>{articles.length ? 'No hay resultados para esta búsqueda' : 'No hay documentos todavía'}</h3><p className="muted">{articles.length ? 'Prueba con otros términos o limpia el campo de búsqueda.' : isAdmin ? 'Carga el primer documento para ayudar a tu equipo.' : 'El administrador aún no ha publicado soluciones.'}</p></div>}
     {openArticle && <ArticleDetail article={openArticle} onClose={() => setOpenArticle(null)} />}
   </section>;
 }
@@ -389,5 +416,5 @@ function CategoryManagement({ categories, onCreate }) {
     setError('');
     try { await onCreate(name.trim()); setName(''); } catch (requestError) { setError(requestError.response?.data?.message || 'No se pudo crear la categoría.'); }
   }
-  return <section className="page-body"><div className="welcome-row"><div><p className="eyebrow">ADMINISTRACIÓN</p><h2>Categorías</h2><p className="muted">Organiza los tickets y la base de conocimiento.</p></div></div><div className="panel category-panel"><form className="ai-form" onSubmit={submit}><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Nueva categoría" /><button className="primary-button">Agregar <span>→</span></button></form>{error && <p className="auth-error" role="alert">{error}</p>}<div className="category-list">{categories.map((category) => <Badge key={category.id} tone="blue">{category.name}</Badge>)}</div></div></section>;
+  return <section className="page-body"><div className="welcome-row"><div><p className="eyebrow">ADMINISTRACIÓN</p><h2>Categorías</h2><p className="muted">Organiza los tickets y la base de conocimiento.</p></div></div><div className="panel category-panel"><form className="ai-form" onSubmit={submit}><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Nueva categoría" aria-label="Nueva categoría" /><button className="primary-button">Agregar <span>→</span></button></form>{error && <p className="auth-error" role="alert">{error}</p>}<div className="category-list">{categories.length ? categories.map((category) => <Badge key={category.id} tone="blue">{category.name}</Badge>) : <p className="muted">Aún no hay categorías. Agrega una para organizar tickets y documentos.</p>}</div></div></section>;
 }
