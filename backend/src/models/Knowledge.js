@@ -8,15 +8,19 @@ export function normalizeArticleInput(input = {}) {
     keywords: input.keywords?.trim() || ''
   };
 }
+// author_name: quién publicó la guía (null si la cuenta ya no existe).
+const SELECT_WITH_AUTHOR = 'SELECT a.id, a.title, a.content, a.category, a.keywords, a.created_at, a.updated_at, u.name AS author_name FROM knowledge_articles a LEFT JOIN users u ON u.id = a.author_id';
 
-export async function listArticles() { const { rows } = await pool.query('SELECT id, title, content, category, keywords, updated_at FROM knowledge_articles ORDER BY updated_at DESC'); return rows; }
+export async function listArticles() { const { rows } = await pool.query(`${SELECT_WITH_AUTHOR} ORDER BY a.updated_at DESC`); return rows; }
 export async function createArticle(article, authorId) {
-  const { rows } = await pool.query(
+  const { rows: inserted } = await pool.query(
     'INSERT INTO knowledge_articles (author_id, title, content, category, keywords) VALUES ($1, $2, $3, $4, $5) RETURNING id',
     [authorId, article.title, article.content, article.category, article.keywords]
   );
-  return { id: rows[0].id, ...article };
+  const { rows } = await pool.query(`${SELECT_WITH_AUTHOR} WHERE a.id = $1`, [inserted[0].id]);
+  return rows[0];
 }
+
 const stopWords = new Set([
   'a', 'al', 'algo', 'algunas', 'algunos', 'ante', 'antes', 'como', 'con', 'contra', 'cual', 'cuando', 'de', 'del', 'desde', 'donde', 'durante',
   'e', 'el', 'ella', 'ellas', 'ellos', 'en', 'entre', 'era', 'eres', 'es', 'esa', 'esas', 'ese', 'eso', 'esos', 'esta', 'estaba', 'estamos', 'estan', 'estar', 'estas', 'este', 'esto', 'estos',

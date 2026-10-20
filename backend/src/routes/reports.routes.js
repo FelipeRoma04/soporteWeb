@@ -1,0 +1,10 @@
+import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.js';
+import { requireRole } from '../middleware/roleGuard.js';
+import { rateLimit } from '../middleware/rateLimit.js';
+import * as reportController from '../controllers/ReportController.js';
+const router = Router();
+router.use(requireAuth, requireRole('admin'), rateLimit({ windowMs: 60_000, max: 60 }));
+router.get('/summary', reportController.summary);
+router.get('/tickets.csv', reportController.exportTickets);
+export default router;

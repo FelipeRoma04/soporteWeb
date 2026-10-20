@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Bot, Plus, Search, ThumbsDown, ThumbsUp } from 'lucide-react';
-import { createCategory, getCategories, getDashboard, getUsers, updateUserRole, updateUserStatus } from './api.js';
+import { BookOpen, Bot, Plus, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import KnowledgeToolbar from './components/KnowledgeToolbar.jsx';
+import { INITIAL_VIEW, applyView } from './utils/knowledgeView.js';
+import { createCategory, deleteCategory, getCategories, getDashboard, getUsers, updateUserRole, updateUserStatus } from './api.js';
 import { analyzeTicket, askAssistant, sendAssistantFeedback } from './services/aiService.js';
 import { createKnowledge, getKnowledge } from './services/knowledgeService.js';
-import { createTicket, getTickets, updateTicketStatus } from './services/ticketService.js';
+import { createTicket, getTickets, rateTicket, updateTicketStatus } from './services/ticketService.js';
 import { getNotifications, markAllNotificationsAsRead, markNotificationAsRead } from './services/notificationService.js';
 import { useAuth } from './context/AuthContext.jsx';
 import MainLayout from './layouts/MainLayout.jsx';
@@ -14,7 +16,10 @@ import Login from './pages/Login.jsx';
 import Users from './pages/Users.jsx';
 import TicketDetail from './pages/TicketDetail.jsx';
 import Settings from './pages/Settings.jsx';
+import Reports from './pages/Reports.jsx';
 import ArticleDetail from './pages/ArticleDetail.jsx';
+import SlaBadge from './components/SlaBadge.jsx';
+
 
 function Badge({ children, tone = 'neutral' }) { return <span className={`badge-soft ${tone}`}>{children}</span>; }
 function statusTone(status) { return status === 'Cerrado' ? 'green' : status === 'En progreso' ? 'blue' : 'amber'; }
@@ -81,6 +86,12 @@ export default function App() {
     return () => clearInterval(timer);
   }, [authenticated, ready]);
 
+  // Los contadores de uso de cada categoría cambian al crear tickets y artículos: se releen al abrir la pantalla.
+  useEffect(() => {
+    if (!authenticated || !ready || active !== 'Categorías') return;
+    getCategories().then((response) => setCategories(response.data)).catch(() => {});
+  }, [active, authenticated, ready]);
+
   if (!authenticated) return <Login onAuth={startSession} />;
   if (!ready) return <div className="notice">Verificando sesión...</div>;
 
@@ -113,6 +124,24 @@ export default function App() {
       refreshTicketData(); // contadores del resumen y gráficos salen del servidor, no de cuentas locales
     } catch (error) {
       flash(error.response?.data?.message || 'No se pudo actualizar el ticket', 4000);
+    }
+  }
+
+  async function rateAttention(ticketId, rating, comment) {
+    const response = await rateTicket(ticketId, rating, comment); // si falla, TicketDetail muestra el mensaje del servidor
+    setTickets((current) => current.map((ticket) => ticket.dbId === ticketId ? { ...ticket, rating: response.data.rating, rating_comment: response.data.rating_comment } : ticket));
+    flash('Gracias por calificar la atención');
+    refreshTicketData();
+  }
+
+  async function removeCategory(category) {
+    try {
+      await deleteCategory(category.id);
+      setCategories((current) => current.filter((item) => item.id !== category.id));
+      flash('Categoría eliminada');
+    } catch (error) {
+      flash(error.response?.data?.message || 'No se pudo eliminar la categoría', 4500);
+      try { setCategories((await getCategories()).data); } catch { /* se conserva la lista actual */ }
     }
   }
 
@@ -187,10 +216,11 @@ export default function App() {
       {active === 'Base de conocimiento' && <Knowledge articles={articles} categories={categories} isAdmin={user?.role === 'admin'} onCreate={async (article) => { const response = await createKnowledge(article); setArticles((current) => [response.data, ...current]); }} />}
       {active === 'Asistente IA' && <Assistant categories={categories} onTicketCreated={refreshTicketData} />}
       {active === 'Usuarios' && user?.role === 'admin' && <Users users={users} currentUserId={user.id} onRoleChange={changeUserRole} onStatusChange={changeUserStatus} />}
-      {active === 'Categorías' && user?.role === 'admin' && <CategoryManagement categories={categories} onCreate={async (name) => { const response = await createCategory(name); setCategories((current) => [...current, response.data].sort((first, second) => first.name.localeCompare(second.name))); }} />}
+      {active === 'Categorías' && user?.role === 'admin' && <CategoryManagement categories={categories} onDelete={removeCategory} onCreate={async (name) => { const response = await createCategory(name); setCategories((current) => [...current, { tickets_count: 0, articles_count: 0, ...response.data }].sort((first, second) => first.name.localeCompare(second.name))); }} />}
+      {active === 'Reportes' && user?.role === 'admin' && <Reports categories={categories} />}
       {active === 'Configuración' && <Settings user={user} />}
       {showForm && <div className="modal-backdrop"><form className="modal-panel" onSubmit={addTicket}><div className="modal-heading"><div><span className="eyebrow">NUEVA SOLICITUD</span><h2>Crear ticket</h2></div><button type="button" className="close-button" onClick={() => setShowForm(false)}>×</button></div><label>Asunto<input name="subject" required placeholder="¿En qué podemos ayudarte?" /></label><label>Categoría<select name="category" defaultValue="General">{ticketCategories.map((name) => <option key={name}>{name}</option>)}</select></label><label>Prioridad<select name="priority"><option>Media</option><option>Alta</option><option>Baja</option><option>Urgente</option></select></label><label>Descripción<textarea name="description" required rows="4" placeholder="Describe el problema con el mayor detalle posible..." /></label><button className="primary-button" type="submit">Enviar ticket <span>→</span></button></form></div>}
-    {selectedTicket && <TicketDetail ticket={selectedTicket} user={user} canManage={canManageTickets} onStatusChange={changeTicketStatus} onClose={() => setSelectedTicketId(null)} />}
+    {selectedTicket && <TicketDetail ticket={selectedTicket} user={user} canManage={canManageTickets} onStatusChange={changeTicketStatus} onRate={rateAttention} onClose={() => setSelectedTicketId(null)} />}
       </>}
   </MainLayout>;
 }
@@ -202,8 +232,16 @@ function TicketTable({ tickets, canManageTickets, onStatusChange, onOpen }) {
     <thead><tr><th>Ticket</th><th>Asunto</th>{canManageTickets && <th>Solicitante</th>}<th>Categoría</th><th>Prioridad</th><th>Estado</th><th>Fecha</th></tr></thead>
     <tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.id}>
       <td data-label="Ticket"><strong className="ticket-id">{ticket.id}</strong></td>
-      <td data-label="Asunto"><button type="button" className="text-button" title="Ver detalle y comentarios" onClick={() => onOpen(ticket.dbId)}>{ticket.subject}</button></td>
-      {canManageTickets && <td data-label="Solicitante"><strong>{ticket.requester_name}</strong><small className="muted" style={{ display: 'block' }}>{formatRole(ticket.requester_role)}</small></td>}
+      <td data-label="Asunto">
+        <button type="button" className="text-button" title="Ver detalle y comentarios" onClick={() => onOpen(ticket.dbId)}>{ticket.subject}</button>
+        {/* El texto del plazo y el badge ahora viven dentro de la celda de Asunto */}
+        {ticket.sla_hours && (
+          <div className="muted sla-line" style={{ marginTop: '6px', fontSize: '13px' }}>
+            Plazo de atención: {ticket.sla_hours} h por prioridad {ticket.priority} <SlaBadge ticket={ticket} always />
+          </div>
+        )}
+      </td>
+      {canManageTickets && (<td data-label="Solicitante"><strong>{ticket.requester_name}</strong><small className="muted" style={{ display: 'block' }}>{formatRole(ticket.requester_role)}</small></td>)}
       <td data-label="Categoría"><span className="category-dot" />{ticket.category}</td>
       <td data-label="Prioridad"><Badge tone={priorityTone(ticket.priority)}>{ticket.priority}</Badge></td>
       <td data-label="Estado">{canManageTickets ? <StatusPicker value={ticket.status} onChange={(status) => onStatusChange(ticket.dbId, status)} /> : <Badge tone={statusTone(ticket.status)}>{ticket.status}</Badge>}</td>
@@ -212,12 +250,12 @@ function TicketTable({ tickets, canManageTickets, onStatusChange, onOpen }) {
   </table>;
 }
 function Knowledge({ articles, categories, isAdmin, onCreate }) {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [view, setView] = useState(INITIAL_VIEW);
   const [showForm, setShowForm] = useState(false);
   const [openArticle, setOpenArticle] = useState(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
-  const visibleArticles = articles.filter((article) => `${article.title} ${article.content} ${article.category} ${article.keywords || ''}`.toLowerCase().includes(searchTerm.toLowerCase()));
+  const visibleArticles = applyView(articles, view);
 
   async function submit(event) {
     event.preventDefault();
@@ -238,7 +276,7 @@ function Knowledge({ articles, categories, isAdmin, onCreate }) {
 
   return <section className="page-body">
     <div className="welcome-row"><div><p className="eyebrow">RECURSOS</p><h2>Base de conocimiento</h2><p className="muted">Soluciones rápidas para los problemas más comunes.</p></div>{isAdmin && <button className="primary-button" onClick={() => setShowForm((current) => !current)}><Plus size={17} />Cargar documento</button>}</div>
-    <div className="knowledge-search"><Search size={20} /><input placeholder="Buscar una solución..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} /></div>
+    <KnowledgeToolbar articles={articles} view={view} onChange={setView} shown={visibleArticles.length} />
     {isAdmin && showForm && <form className="panel knowledge-form" onSubmit={submit}>
       <label>Título<input name="title" required placeholder="Problemas para entrar a Teams" /></label>
       <label>Categoría<select name="category" required defaultValue="" disabled={!categories.length}>
@@ -251,8 +289,8 @@ function Knowledge({ articles, categories, isAdmin, onCreate }) {
       {formError && <p className="auth-error" role="alert">{formError}</p>}
       <button className="primary-button" disabled={saving || !categories.length}>{saving ? 'Guardando...' : 'Guardar documento'} <span>→</span></button>
     </form>}
-    <div className="article-grid">{visibleArticles.map((article) => <article className="article-card" key={article.id}><div className="article-icon"><BookOpen size={20} /></div><Badge tone="blue">{article.category}</Badge><h3>{article.title}</h3><p>Actualizado: {new Date(article.updated_at || Date.now()).toLocaleDateString('es-ES')}</p><button className="text-button" onClick={() => setOpenArticle(article)}>Leer artículo →</button></article>)}</div>
-    {!visibleArticles.length && <div className="panel empty-state"><BookOpen size={24} /><h3>{articles.length ? 'No hay resultados para esta búsqueda' : 'No hay documentos todavía'}</h3><p className="muted">{articles.length ? 'Prueba con otros términos o limpia el campo de búsqueda.' : isAdmin ? 'Carga el primer documento para ayudar a tu equipo.' : 'El administrador aún no ha publicado soluciones.'}</p></div>}
+    <div className="article-grid">{visibleArticles.map((article) => <article className="article-card" key={article.id}><div className="article-icon"><BookOpen size={20} /></div><Badge tone="blue">{article.category}</Badge><h3>{article.title}</h3><p>{article.author_name ? `Publicado por ${article.author_name} · ` : ''}Actualizado: {new Date(article.updated_at || Date.now()).toLocaleDateString('es-ES')}</p><button className="text-button" onClick={() => setOpenArticle(article)}>Leer artículo →</button></article>)}</div>
+    {!visibleArticles.length && <div className="panel empty-state"><BookOpen size={24} /><h3>{articles.length ? 'No hay resultados con estos filtros' : 'No hay documentos todavía'}</h3><p className="muted">{articles.length ? 'Prueba con otros términos o usa «Limpiar» para quitar los filtros.' : isAdmin ? 'Carga el primer documento para ayudar a tu equipo.' : 'El administrador aún no ha publicado soluciones.'}</p></div>}
     {openArticle && <ArticleDetail article={openArticle} onClose={() => setOpenArticle(null)} />}
   </section>;
 }
@@ -407,7 +445,7 @@ function Assistant({ categories, onTicketCreated }) {
     </div>
   </section>;
 }
-function CategoryManagement({ categories, onCreate }) {
+function CategoryManagement({ categories, onCreate, onDelete }) {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   async function submit(event) {
@@ -416,5 +454,24 @@ function CategoryManagement({ categories, onCreate }) {
     setError('');
     try { await onCreate(name.trim()); setName(''); } catch (requestError) { setError(requestError.response?.data?.message || 'No se pudo crear la categoría.'); }
   }
-  return <section className="page-body"><div className="welcome-row"><div><p className="eyebrow">ADMINISTRACIÓN</p><h2>Categorías</h2><p className="muted">Organiza los tickets y la base de conocimiento.</p></div></div><div className="panel category-panel"><form className="ai-form" onSubmit={submit}><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Nueva categoría" aria-label="Nueva categoría" /><button className="primary-button">Agregar <span>→</span></button></form>{error && <p className="auth-error" role="alert">{error}</p>}<div className="category-list">{categories.length ? categories.map((category) => <Badge key={category.id} tone="blue">{category.name}</Badge>) : <p className="muted">Aún no hay categorías. Agrega una para organizar tickets y documentos.</p>}</div></div></section>;
+  return <section className="page-body"><div className="welcome-row"><div><p className="eyebrow">ADMINISTRACIÓN</p><h2>Categorías</h2><p className="muted">Organiza los tickets y la base de conocimiento.</p></div></div><div className="panel category-panel"><form className="ai-form" onSubmit={submit}><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Nueva categoría" aria-label="Nueva categoría" /><button className="primary-button">Agregar <span>→</span></button></form>{error && <p className="auth-error" role="alert">{error}</p>}<div className="category-list">{categories.length ? categories.map((category) => <CategoryChip key={category.id} category={category} onDelete={onDelete} />) : <p className="muted">Aún no hay categorías. Agrega una para organizar tickets y documentos.</p>}</div></div></section>;
+}
+// Una categoría solo se puede eliminar si ningún ticket ni artículo la usa (el servidor lo vuelve a comprobar).
+function CategoryChip({ category, onDelete }) {
+  const tickets = Number(category.tickets_count || 0);
+  const articles = Number(category.articles_count || 0);
+  const isDefault = category.name.trim().toLowerCase() === 'general';
+  const inUse = tickets + articles > 0;
+  const usage = [tickets && `${tickets} ${tickets === 1 ? 'ticket' : 'tickets'}`, articles && `${articles} ${articles === 1 ? 'artículo' : 'artículos'}`].filter(Boolean).join(' y ');
+
+  function remove() {
+    if (window.confirm(`¿Eliminar la categoría «${category.name}»? Ningún ticket ni artículo la usa.`)) onDelete(category);
+  }
+
+  return <span className="category-chip">
+    <Badge tone="blue">{category.name}</Badge>
+    {isDefault ? <small className="category-usage" title="Es la categoría por defecto y no se puede eliminar">Por defecto</small>
+      : inUse ? <small className="category-usage" title={`En uso por ${usage}. No se puede eliminar.`}>{tickets + articles} en uso</small>
+      : <button type="button" className="category-remove" aria-label={`Eliminar la categoría ${category.name}`} title="Eliminar categoría sin uso" onClick={remove}><X size={14} aria-hidden="true" /></button>}
+  </span>;
 }

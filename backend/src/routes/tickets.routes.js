@@ -9,5 +9,6 @@ router.post('/', ticketController.create);
 router.get('/:id/comments', ticketController.listComments);
 router.post('/:id/comments', ticketController.createComment);
 router.get('/:id/history', ticketController.listHistory);
+router.post('/:id/rating', ticketController.rate);
 router.patch('/:id/status', requireRole('agent', 'admin'), ticketController.updateStatus);
 export default router;

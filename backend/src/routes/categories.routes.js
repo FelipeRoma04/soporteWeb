@@ -5,4 +5,5 @@ import * as categoryController from '../controllers/CategoryController.js';
 const router = Router();
 router.get('/', requireAuth, categoryController.list);
 router.post('/', requireAuth, requireRole('admin'), categoryController.create);
+router.delete('/:id', requireAuth, requireRole('admin'), categoryController.remove);
 export default router;

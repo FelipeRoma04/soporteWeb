@@ -30,3 +30,6 @@ export async function createComment(req, res, next) {
     res.status(201).json(await ticketService.addComment(req.params.id, req.body.body || '', req.user));
   } catch (error) { next(error); }
 }
+export async function rate(req, res, next) {
+  try { res.status(201).json(await ticketService.rate(req.params.id, req.body, req.user)); } catch (error) { next(error); }
+}

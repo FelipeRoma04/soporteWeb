@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, CheckCheck, LogOut, Search, X } from 'lucide-react';
+import { Bell, CheckCheck, LogOut, Search, Settings, X } from 'lucide-react';
 import { formatRole } from '../utils/roles.js';
 
 const formatDate = (value) => new Date(value).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 // En estas pantallas la propia tabla ya se filtra al escribir; en las demás, el buscador muestra una lista de resultados.
 const FILTERED_PAGES = ['Resumen', 'Mis tickets'];
 
-export default function Header({ active, search, onSearch, onSearchSubmit, searchResults = [], onOpenTicket, user, onLogout, notifications, onReadNotification, onReadAllNotifications }) {
+export default function Header({ active, search, onSearch, onSearchSubmit, searchResults = [], onOpenTicket, user, onLogout, onOpenSettings, notifications, onReadNotification, onReadAllNotifications }) {
   const [bellOpen, setBellOpen] = useState(false);
   const [resultsOpen, setResultsOpen] = useState(false);
   const bellRef = useRef(null);
@@ -58,6 +58,7 @@ export default function Header({ active, search, onSearch, onSearchSubmit, searc
           {notifications.length ? <div className="notification-list">{notifications.slice(0, 8).map((notification) => <button className={`notification-item ${notification.read_at ? 'read' : ''}`} key={notification.id} onClick={() => { setBellOpen(false); onReadNotification(notification); }}><span className="notification-dot" /><span><strong>{notification.message}</strong><small>{formatDate(notification.created_at)}</small></span></button>)}</div> : <p className="notification-empty">No tienes notificaciones.</p>}
         </div>}
       </div>
+      <button type="button" className={`icon-button ${active === 'Configuración' ? 'active' : ''}`} title="Configuración" aria-label="Abrir configuración" aria-current={active === 'Configuración' ? 'page' : undefined} onClick={onOpenSettings}><Settings size={18} /></button>
       <button className="icon-button" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={onLogout}><LogOut size={18} /></button>
       <div className="header-user" title={user?.name || 'Cuenta'}>
         <div className="mini-avatar" aria-hidden="true">{user?.name?.slice(0, 2).toUpperCase() || 'U'}</div>

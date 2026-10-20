@@ -36,3 +36,7 @@ export const createCategory = (name) => api.post('/categories', { name });
 export const getDashboard = () => api.get('/dashboard');
 export const getKnowledge = () => api.get('/knowledge');
 export const createKnowledge = (article) => api.post('/knowledge', article);
+export const deleteCategory = (categoryId) => api.delete(`/categories/${categoryId}`);
+export const rateTicket = (ticketId, rating, comment) => api.post(`/tickets/${ticketId}/rating`, { rating, comment });
+export const getReportSummary = (params) => api.get('/reports/summary', { params });
+export const downloadTicketsCsv = (params) => api.get('/reports/tickets.csv', { params, responseType: 'blob' });

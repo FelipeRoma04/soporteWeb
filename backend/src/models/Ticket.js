@@ -1,5 +1,6 @@
 import { pool } from '../config/db.js';
 import { STAFF_ROLES } from './Role.js';
+import { slaHoursSql } from './Sla.js';
 
 export const TICKET_STATUSES = Object.freeze(['Abierto', 'En progreso', 'Cerrado']);
 export const TICKET_PRIORITIES = Object.freeze(['Baja', 'Media', 'Alta', 'Urgente']);
@@ -14,7 +15,11 @@ export function normalizeTicketInput(input = {}) {
 }
 
 // Todas las consultas devuelven también quién solicitó el ticket y con qué rol.
-const SELECT_WITH_REQUESTER = 'SELECT t.*, u.name AS requester_name, u.role AS requester_role FROM tickets t JOIN users u ON u.id = t.user_id';
+// Incluye también la calificación de la atención (rating y rating_comment son null mientras no se califique).
+// sla_hours y sla_due_at indican el plazo de resolución según la prioridad (ver models/Sla.js).
+const SELECT_WITH_REQUESTER = `SELECT t.*, u.name AS requester_name, u.role AS requester_role, r.rating, r.comment AS rating_comment,
+    ${slaHoursSql('t.priority')} AS sla_hours, t.created_at + ${slaHoursSql('t.priority')} * INTERVAL '1 hour' AS sla_due_at
+  FROM tickets t JOIN users u ON u.id = t.user_id LEFT JOIN ticket_ratings r ON r.ticket_id = t.id`;
 
 export async function findTicketsForUser(user) {
   const isStaff = STAFF_ROLES.includes(user.role);

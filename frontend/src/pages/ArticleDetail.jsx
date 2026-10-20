@@ -15,7 +15,7 @@ export default function ArticleDetail({ article, onClose }) {
         <div><span className="eyebrow">{String(article.category).toUpperCase()}</span><h2>{article.title}</h2></div>
         <button type="button" className="close-button" onClick={onClose} aria-label="Cerrar">×</button>
       </div>
-      <p className="muted">Actualizado: {new Date(article.updated_at || Date.now()).toLocaleDateString('es-ES')}</p>
+      <p className="muted">{article.author_name ? <>Publicado por <strong>{article.author_name}</strong> · </> : null}Actualizado: {new Date(article.updated_at || Date.now()).toLocaleDateString('es-ES')}</p>
       <div style={{ whiteSpace: 'pre-wrap', fontSize: 14, lineHeight: 1.65 }}>{article.content}</div>
       {keywords.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>{keywords.map((keyword) => <span className="badge-soft blue" key={keyword}>{keyword}</span>)}</div>}
     </div>
