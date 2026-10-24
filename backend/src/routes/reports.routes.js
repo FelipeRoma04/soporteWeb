@@ -7,4 +7,5 @@ const router = Router();
 router.use(requireAuth, requireRole('admin'), rateLimit({ windowMs: 60_000, max: 60 }));
 router.get('/summary', reportController.summary);
 router.get('/tickets.csv', reportController.exportTickets);
+router.get('/tickets.xlsx', reportController.exportTicketsXlsx);
 export default router;

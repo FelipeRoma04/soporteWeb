@@ -40,3 +40,4 @@ export const deleteCategory = (categoryId) => api.delete(`/categories/${category
 export const rateTicket = (ticketId, rating, comment) => api.post(`/tickets/${ticketId}/rating`, { rating, comment });
 export const getReportSummary = (params) => api.get('/reports/summary', { params });
 export const downloadTicketsCsv = (params) => api.get('/reports/tickets.csv', { params, responseType: 'blob' });
+export const downloadTicketsXlsx = (params) => api.get('/reports/tickets.xlsx', { params, responseType: 'blob' });

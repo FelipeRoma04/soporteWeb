@@ -3,13 +3,24 @@ import { Clock, Download, Star, Ticket } from 'lucide-react';
 import MetricsCard from '../components/MetricsCard.jsx';
 import StarRating from '../components/StarRating.jsx';
 import { downloadTicketsCsv, getReportSummary } from '../services/reportService.js';
+import { downloadTicketsXlsx } from '../api.js';
 
 const STATUSES = ['Abierto', 'En progreso', 'Cerrado'];
 const PRIORITIES = ['Baja', 'Media', 'Alta', 'Urgente'];
 const EMPTY_FILTERS = { from: '', to: '', status: '', category: '', priority: '' };
 
 const timeZone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } })();
-const monthLabel = (key) => { const [year, month] = key.split('-').map(Number); return new Date(year, month - 1, 1).toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }); };
+// Solo el nombre del mes ("Septiembre"); el año se agrega únicamente si los datos abarcan más de un año.
+const monthLabel = (key, withYear = false) => {
+  const [year, month] = key.split('-').map(Number);
+  const name = new Date(year, month - 1, 1).toLocaleDateString('es-ES', { month: 'long' });
+  const label = name.charAt(0).toUpperCase() + name.slice(1);
+  return withYear ? `${label} ${year}` : label;
+};
+const parseDay = (key) => { const [year, month, day] = key.split('-').map(Number); return new Date(year, month - 1, day); };
+const dayLabel = (key) => parseDay(key).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+// En la vista por día, el mes (abreviado) se muestra solo en el primer día de cada mes y en la primera columna.
+const monthTag = (key, index) => (index === 0 || key.endsWith('-01') ? parseDay(key).toLocaleDateString('es-ES', { month: 'short' }).replace('.', '') : '');
 const hours = (value) => (value === null || value === undefined ? '—' : `${value} h`);
 // Solo se envían los filtros que tienen valor; la zona horaria hace que "desde/hasta" cuenten por días de quien consulta.
 const toParams = (filters) => ({ ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)), tz: timeZone });
@@ -20,6 +31,7 @@ export default function Reports({ categories = [] }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [chartMode, setChartMode] = useState('month'); // 'month' = tickets por mes, 'day' = día a día
   const hasFilters = Object.values(filters).some(Boolean);
   const update = (field) => (event) => setFilters((current) => ({ ...current, [field]: event.target.value }));
 
@@ -36,15 +48,16 @@ export default function Reports({ categories = [] }) {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [filters]);
 
-  async function download() {
+  // Excel (con filtros y columnas ajustadas) o CSV, con los mismos filtros de la pantalla.
+  async function download(kind = 'xlsx') {
     setDownloading(true);
     setError('');
     try {
-      const response = await downloadTicketsCsv(toParams(filters));
+      const response = await (kind === 'csv' ? downloadTicketsCsv : downloadTicketsXlsx)(toParams(filters));
       const url = URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `tickets-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `tickets-${new Date().toISOString().slice(0, 10)}.${kind}`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -60,11 +73,19 @@ export default function Reports({ categories = [] }) {
   const totals = data?.totals;
   const satisfaction = data?.satisfaction;
   const resolvedShare = totals?.total ? Math.round((totals.closed / totals.total) * 100) : 0;
+  const showYear = data ? new Set(data.by_month.map((m) => m.month.slice(0, 4))).size > 1 : false;
+  const byDay = chartMode === 'day';
+  const series = !data ? [] : byDay
+    ? (data.by_day || []).map((item, index) => ({ ...item, key: item.day, label: String(Number(item.day.slice(8))), tag: monthTag(item.day, index), name: dayLabel(item.day) }))
+    : data.by_month.map((item) => ({ ...item, key: item.month, label: monthLabel(item.month, showYear), tag: '', name: monthLabel(item.month, showYear) }));
 
   return <section className="page-body reports-page" aria-busy={loading}>
     <div className="welcome-row">
       <div><p className="eyebrow">ADMINISTRACIÓN</p><h2>Reportes</h2><p className="muted">Estadísticas de la mesa de soporte y descarga de tickets.</p></div>
-      <button type="button" className="primary-button" onClick={download} disabled={downloading || !totals?.total}><Download size={17} />{downloading ? 'Preparando...' : 'Descargar CSV'}</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <button type="button" className="text-button" onClick={() => download('csv')} disabled={downloading || !totals?.total}>Descargar CSV</button>
+        <button type="button" className="primary-button" onClick={() => download('xlsx')} disabled={downloading || !totals?.total}><Download size={17} />{downloading ? 'Preparando...' : 'Descargar Excel'}</button>
+      </div>
     </div>
 
     <form className="panel report-filters" onSubmit={(event) => event.preventDefault()} aria-label="Filtros del reporte">
@@ -88,17 +109,24 @@ export default function Reports({ categories = [] }) {
 
       <div className="chart-grid">
         <section className="panel chart-panel month-panel">
-          <h3>Tickets por mes</h3>
-          {data.by_month.length ? <>
-            <div className="month-chart" role="img" aria-label={`Tickets por mes: ${data.by_month.map((m) => `${monthLabel(m.month)} ${m.created} creados, ${m.closed} cerrados`).join('; ')}`}>
+          <div className="chart-head">
+            <h3>{byDay ? 'Tickets por día' : 'Tickets por mes'}</h3>
+            <div className="segmented" role="group" aria-label="Agrupar tickets por">
+              <button type="button" className={byDay ? '' : 'active'} aria-pressed={!byDay} onClick={() => setChartMode('month')}>Mes</button>
+              <button type="button" className={byDay ? 'active' : ''} aria-pressed={byDay} onClick={() => setChartMode('day')}>Día</button>
+            </div>
+          </div>
+          {series.length ? <>
+            <div className={`month-chart${byDay ? ' is-daily' : ''}`} role="img" aria-label={`Tickets por ${byDay ? 'día' : 'mes'}: ${series.map((item) => `${item.name} ${item.created} creados, ${item.closed} cerrados`).join('; ')}`}>
               {(() => {
-                const max = Math.max(...data.by_month.flatMap((m) => [m.created, m.closed]), 1);
-                return data.by_month.map((m) => <div className="month-col" key={m.month}>
+                const max = Math.max(...series.flatMap((item) => [item.created, item.closed]), 1);
+                return series.map((item) => <div className="month-col" key={item.key}>
                   <div className="month-bars">
-                    <span className="month-bar created" style={{ height: `${(m.created / max) * 100}%` }} title={`${m.created} creados`}><em>{m.created}</em></span>
-                    <span className="month-bar closed" style={{ height: `${(m.closed / max) * 100}%` }} title={`${m.closed} cerrados`}><em>{m.closed}</em></span>
+                    <span className="month-bar created" style={{ height: `${(item.created / max) * 100}%` }} title={`${item.name}: ${item.created} creados`}>{(!byDay || item.created > 0) && <em>{item.created}</em>}</span>
+                    <span className="month-bar closed" style={{ height: `${(item.closed / max) * 100}%` }} title={`${item.name}: ${item.closed} cerrados`}>{(!byDay || item.closed > 0) && <em>{item.closed}</em>}</span>
                   </div>
-                  <small>{monthLabel(m.month)}</small>
+                  <small>{item.label}</small>
+                  {byDay && <small className="month-tag">{item.tag || '\u00a0'}</small>}
                 </div>);
               })()}
             </div>

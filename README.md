@@ -2,7 +2,7 @@
 
 Mesa de ayuda con tickets, comentarios, notificaciones, plazos de atención (SLA) con avisos de vencimiento, base de conocimiento con autoría, reportes y estadísticas para administradores, y un asistente de IA que responde usando las guías y distingue la charla informal de una consulta real.
 
-**Tecnologías:** React 18 + Vite (interfaz) · Node.js 20 + Express (API) · PostgreSQL · OpenAI, Anthropic o Groq (opcional).
+**Tecnologías:** React 18 + Vite (interfaz) · Node.js 20 + Express (API) · PostgreSQL · exceljs (exportación a Excel) · OpenAI, Anthropic o Groq (opcional).
 
 ## Contenido
 
@@ -13,23 +13,24 @@ Mesa de ayuda con tickets, comentarios, notificaciones, plazos de atención (SLA
 5. [Puesta en marcha](#puesta-en-marcha)
 6. [Roles y permisos](#roles-y-permisos)
 7. [Plazos de atención (SLA)](#plazos-de-atención-sla)
-8. [Endpoints destacados](#endpoints-destacados)
-9. [Comandos útiles](#comandos-útiles)
-10. [Solución de problemas](#solución-de-problemas)
-11. [Seguridad](#seguridad)
-12. [Antes de publicar en internet](#antes-de-publicar-en-internet)
-13. [Despliegue gratuito](#despliegue-gratuito-github-pages--render--neon)
+8. [Reportes y exportación](#reportes-y-exportación)
+9. [Endpoints destacados](#endpoints-destacados)
+10. [Comandos útiles](#comandos-útiles)
+11. [Solución de problemas](#solución-de-problemas)
+12. [Seguridad](#seguridad)
+13. [Antes de publicar en internet](#antes-de-publicar-en-internet)
+14. [Despliegue gratuito](#despliegue-gratuito-github-pages--render--neon)
 
 ---
 
 ## Características
 
-- **Tickets** con prioridad, categoría, estado, comentarios, historial y notificaciones en la campana.
+- **Tickets** con prioridad, categoría, estado, comentarios, historial y notificaciones en la campana, con búsqueda, filtros y orden en la lista (todo en el navegador).
 - **Plazos de atención (SLA)** según la prioridad. El ticket vencido no se borra: se marca como *Vencido* y se avisa a agentes y administradores.
 - **Calificación de la atención:** 1 a 5 estrellas y comentario opcional al cerrar un ticket.
 - **Base de conocimiento** con el autor visible en cada artículo, búsqueda, filtros por categoría y autor, y orden por fecha, título, autor o categoría (todo en el navegador).
 - **Asistente de IA** que busca primero en las guías, ofrece crear un ticket si no hay solución y responde directo a saludos y charla informal.
-- **Reportes** (administrador): tickets por mes, categorías más frecuentes, tiempos de resolución, prioridades, rendimiento de agentes, satisfacción y descarga CSV con filtros.
+- **Reportes** (administrador): tickets por mes o por día, categorías más frecuentes, tiempos de resolución, prioridades, rendimiento de agentes, satisfacción y descarga en Excel (.xlsx) o CSV con filtros.
 - **Administración** de usuarios (roles y activación) y de categorías (crear y eliminar las que no se usan).
 - **Interfaz** con barra de navegación superior, tuerca de configuración en la cabecera y botón flotante del asistente.
 
@@ -111,7 +112,7 @@ Los errores se lanzan con un `status` HTTP y los recoge `errorHandler`; cualquie
 │       ├── middleware/         auth · roleGuard · loginThrottle · rateLimit · errorHandler
 │       ├── services/           AuthService · TicketService · KnowledgeService · SlaService ·
 │       │                       OpenAIService (proveedor de IA: OpenAI, Anthropic o Groq)
-│       ├── utils/              smallTalk (charla informal del asistente) · reportFilters · csv
+│       ├── utils/              smallTalk (charla informal del asistente) · reportFilters · csv · xlsx
 │       └── models/             User · Ticket · Comment · TicketHistory · Notification · Category ·
 │                               Knowledge · AIInteraction · Role · Sla · SlaAlert · TicketRating
 │
@@ -127,22 +128,24 @@ Los errores se lanzan con un `status` HTTP y los recoge `errorHandler`; cualquie
 │   ├── public/
 │   │   └── favicon.png       Icono de la pestaña del navegador (logo de SysPulse)
 │   └── src/
-│       ├── main.jsx · App.jsx  Punto de entrada y vistas principales (incluye la tabla de tickets)
+│       ├── main.jsx · App.jsx  Punto de entrada y vistas principales (incluye la lista de tickets con su barra de filtros)
 │       ├── api.js              Cliente axios (añade el token a cada petición)
-│       ├── styles.css          Estilos globales, barra superior, etiquetas de SLA y botón flotante
+│       ├── styles.css          Estilos globales, barra superior, etiquetas de SLA, botón flotante y barra de filtros de tickets
 │       ├── context/            AuthContext: usuario y sesión actuales
 │       ├── layouts/            MainLayout: barra superior de navegación + cabecera + botón flotante del asistente
 │       ├── pages/              Login · Register · Dashboard · Tickets · TicketDetail · Knowledge ·
 │       │                       ArticleDetail · AIChat · Notifications · Users · Settings · Reports
 │       ├── components/         Sidebar (navegación, ahora horizontal) · Header · AssistantButton · TicketCard ·
 │       │                       TicketModal · StatusPicker · SlaBadge · StarRating · KnowledgeCard · KnowledgeToolbar ·
-│       │                       MetricsCard · Charts · ChatBot · NotificationBell · ProtectedRoute · BrandIdentity
+│       │                       TicketToolbar · MetricsCard · Charts · ChatBot · NotificationBell · ProtectedRoute ·
+│       │                       BrandIdentity
 │       ├── services/           Llamadas a la API por recurso (auth, tickets, knowledge,
 │       │                       notificaciones, IA, reportes)
 │       └── utils/
 │           ├── roles.js          Ayudas para comprobar roles en la interfaz
 │           ├── sla.js            Estado del plazo de un ticket (vencido, por vencer, resuelto a tiempo)
-│           └── knowledgeView.js  Filtros y orden de la base de conocimiento (se hacen en el navegador)
+│           ├── knowledgeView.js  Filtros y orden de la base de conocimiento (se hacen en el navegador)
+│           └── ticketView.js     Filtros y orden de la lista de tickets (se hacen en el navegador)
 │
 └── database/
     ├── schema.sql                      Esquema completo e idempotente
@@ -286,9 +289,9 @@ Las versiones anteriores usaban MySQL; sus tablas y datos no se migran a Postgre
 
 | Rol | Puede |
 | --- | --- |
-| **Usuario** | Crear tickets, ver y comentar los suyos, calificar la atención de los que ya se cerraron, usar el asistente y consultar la base de conocimiento (con el autor de cada artículo). |
-| **Agente** | Además: ver todos los tickets, cambiar su estado y recibir los avisos de plazo vencido. |
-| **Administrador** | Además: gestionar usuarios, categorías (crear y eliminar las que no se usan) y artículos, recibir los avisos de plazo vencido y consultar **Reportes** (gráficos, satisfacción, rendimiento de agentes y descarga CSV con filtros). |
+| **Usuario** | Crear tickets, ver y comentar los suyos, calificar la atención de los que ya se cerraron, buscar, filtrar y ordenar sus tickets, usar el asistente y consultar la base de conocimiento (con el autor de cada artículo). |
+| **Agente** | Además: ver todos los tickets (con filtros extra como «Gestionados por mí»), cambiar su estado y recibir los avisos de plazo vencido. |
+| **Administrador** | Además: gestionar usuarios, categorías (crear y eliminar las que no se usan) y artículos, recibir los avisos de plazo vencido y consultar **Reportes** (gráficos, satisfacción, rendimiento de agentes y descarga en Excel o CSV con filtros). |
 
 El rol se lee de la base de datos en cada petición, así que un cambio surte efecto al instante.
 
@@ -320,6 +323,16 @@ INSERT INTO ticket_sla_alerts (ticket_id) SELECT id FROM tickets WHERE status <>
 
 ---
 
+## Reportes y exportación
+
+- **Filtros** (aplican a gráficos, tablas y descargas): desde, hasta, estado, categoría y prioridad. Las fechas cuentan por días completos en la zona horaria de quien consulta.
+- **Tickets por mes / por día:** el selector de la gráfica cambia entre ambas vistas. La vista por día muestra hasta los últimos 62 días (se desplaza si no caben) y rellena con cero los días sin tickets; la mensual muestra hasta 24 meses. En ambas, «cerrados» cuenta los tickets creados en ese periodo que hoy están cerrados.
+- **Descarga en Excel (.xlsx):** una hoja con encabezado fijo, filtros de Excel en todas las columnas y ancho de columna ajustado al contenido. Las fechas son fechas reales de Excel (se pueden filtrar por año y mes) y las horas, el plazo y la calificación son números. Incluye *Plazo (h)* y *Estado del plazo* (En plazo, Vencido, Resuelto a tiempo, Resuelto fuera de plazo); si no hay agente, *Atendido por* dice «Sin asignar».
+- **Descarga en CSV:** las mismas columnas, separador `;` y UTF-8 con BOM.
+- Ambas descargas respetan los filtros de la pantalla y se limitan a 20 000 filas.
+
+---
+
 ## Endpoints destacados
 
 | Método y ruta | Quién | Qué hace |
@@ -327,8 +340,9 @@ INSERT INTO ticket_sla_alerts (ticket_id) SELECT id FROM tickets WHERE status <>
 | `GET /api/tickets` | Sesión iniciada | Lista los tickets visibles para el usuario, con `sla_hours` y `sla_due_at`. Dispara la revisión de plazos vencidos. |
 | `DELETE /api/categories/:id` | Administrador | Elimina una categoría sin uso (409 si la usan tickets o artículos). |
 | `POST /api/tickets/:id/rating` | Quien creó el ticket | Califica la atención (`rating` 1-5, `comment` opcional) cuando está cerrado; una sola vez. |
-| `GET /api/reports/summary` | Administrador | Estadísticas para los gráficos. Filtros: `from`, `to` (AAAA-MM-DD), `status`, `category`, `priority`, `tz`. |
-| `GET /api/reports/tickets.csv` | Administrador | Descarga los tickets filtrados (separador `;`, UTF-8 con BOM: abre directo en Excel). |
+| `GET /api/reports/summary` | Administrador | Estadísticas para los gráficos. Filtros: `from`, `to` (AAAA-MM-DD), `status`, `category`, `priority`, `tz`. Incluye la serie por mes (`by_month`) y por día (`by_day`). |
+| `GET /api/reports/tickets.xlsx` | Administrador | Descarga los tickets filtrados en Excel, con filtros en las columnas y ancho ajustado al contenido. |
+| `GET /api/reports/tickets.csv` | Administrador | Descarga los mismos tickets en CSV (separador `;`, UTF-8 con BOM: abre directo en Excel). |
 
 ---
 
@@ -370,6 +384,8 @@ INSERT INTO ticket_sla_alerts (ticket_id) SELECT id FROM tickets WHERE status <>
 | Aviso `DEP0040 punycode` al arrancar | Es inofensivo (viene de una dependencia) |
 | `container name "/soporteweb-db" is already in use` | Queda el contenedor MySQL de la versión anterior: `docker rm -f soporteweb-db` y luego `npm run db:up` |
 | VS Code marca error en `neon.ts` (*Cannot find module `@neon/config/v1`*, `branch` implícito) | Faltan las dependencias de la raíz: ejecuta `npm install` en la carpeta principal y reinicia el servidor de TypeScript (*Ctrl+Shift+P → TypeScript: Restart TS Server*). `neon.ts` solo lo usa la CLI de Neon; la aplicación no lo necesita |
+| Falla la descarga de Excel o responde error 500 | Falta la dependencia: ejecuta `npm install` en `backend/` (o `npm run setup`) y reinicia la API. El error exacto aparece en la consola de la API |
+| La gráfica por día no muestra días antiguos | Solo muestra los últimos 62 días: usa los filtros Desde/Hasta o la vista por mes |
 | En producción, la primera petición tarda o falla | El plan gratuito de Render duerme la API tras un rato sin uso: espera unos segundos y reintenta |
 | La interfaz en Pages carga pero no deja entrar (error de red o CORS) | En Render, `CLIENT_URL` debe ser el origen de Pages **sin ruta**: `https://feliperoma04.github.io`. Comprueba también la variable `VITE_API_URL` del repositorio |
 
@@ -380,7 +396,7 @@ INSERT INTO ticket_sla_alerts (ticket_id) SELECT id FROM tickets WHERE status <>
 - Las contraseñas se guardan con `bcrypt`; las sesiones son tokens JWT de 8 horas.
 - Cambiar la contraseña (desde **Configuración** o con `--reset-password`) cierra las demás sesiones.
 - El inicio de sesión limita los intentos: 5 por correo y equipo, y 20 por correo desde cualquier equipo, cada 15 minutos. Los contadores viven en la memoria de la API y se reinician con ella.
-- Los reportes y la descarga CSV son solo para administradores; las calificaciones solo las puede enviar quien creó el ticket.
+- Los reportes y las descargas (Excel y CSV) son solo para administradores; las calificaciones solo las puede enviar quien creó el ticket. En el Excel el texto se guarda siempre como texto (nunca como fórmula) y en el CSV se neutralizan las celdas que empiezan con `=`, `+`, `-` o `@`.
 - El `.env` y las claves nunca se suben al repositorio.
 
 ---
@@ -410,7 +426,7 @@ El frontend estático se publica en GitHub Pages; la API Express se ejecuta en R
 
 1. Crea una base de datos en [Neon](https://neon.tech/), activa **Connection pooling** y copia la cadena de conexión pooled PostgreSQL (la dirección del host suele incluir `-pooler`).
 2. En `backend/.env`, define `DATABASE_URL`, `ADMIN_NAME`, `ADMIN_EMAIL` y una contraseña fuerte para `ADMIN_PASSWORD`. Ejecuta `npm run db:setup` desde la raíz para crear el esquema, el administrador y las guías de ejemplo en Neon. No se copian datos que estén en tu antigua base MySQL.
-3. En Render, crea un Blueprint desde el repositorio usando [`render.yaml`](./render.yaml). Configura `DATABASE_URL` con la cadena de Neon y `CLIENT_URL` con el origen de GitHub Pages, por ejemplo `https://feliperoma04.github.io`. Render genera `JWT_SECRET`. **Antes de desplegar una versión nueva**, aplica el esquema actualizado a Neon con `npm run db:setup`.
+3. En Render, crea un Blueprint desde el repositorio usando [`render.yaml`](./render.yaml). Configura `DATABASE_URL` con la cadena de Neon y `CLIENT_URL` con el origen de GitHub Pages, por ejemplo `https://feliperoma04.github.io`. Render genera `JWT_SECRET`. **Antes de desplegar una versión nueva**, aplica el esquema actualizado a Neon con `npm run db:setup`. Las dependencias del backend (incluida `exceljs`) se instalan con `npm install`; no requieren variables nuevas ni cambios en la base de datos.
 4. En GitHub, crea la variable de repositorio `VITE_API_URL` con la URL de la API de Render seguida de `/api`, por ejemplo `https://soporte-web-api.onrender.com/api`.
 5. En **Settings → Pages**, selecciona **GitHub Actions** como origen. Al subir cambios a `main`, [el workflow](./.github/workflows/deploy-pages.yml) compila el frontend y lo publica en Pages.
 

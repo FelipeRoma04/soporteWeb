@@ -4,7 +4,11 @@ import { buildTicketWhere } from '../utils/reportFilters.js';
 
 const HOURS = 'EXTRACT(EPOCH FROM (t.updated_at - t.created_at)) / 3600';
 const MAX_MONTHS = 24;
+const MAX_DAYS = 62;
 const MAX_EXPORT_ROWS = 20000;
+// Plazo de atención por prioridad (mismas horas que usa la app: Urgente 4, Alta 8, Media 24, Baja 72).
+const SLA_HOURS_SQL = "CASE t.priority WHEN 'Urgente' THEN 4 WHEN 'Alta' THEN 8 WHEN 'Media' THEN 24 ELSE 72 END";
+const SLA_DUE_SQL = `(t.created_at + (${SLA_HOURS_SQL}) * INTERVAL '1 hour')`;
 const round1 = (value) => (value === null || value === undefined ? null : Math.round(Number(value) * 10) / 10);
 
 export async function isKnownTimeZone(name) {
@@ -27,9 +31,22 @@ function fillMonths(rows) {
   return months.slice(-MAX_MONTHS);
 }
 
+// Igual que fillMonths pero por día (AAAA-MM-DD): rellena con ceros los días sin tickets y deja los últimos MAX_DAYS.
+function fillDays(rows) {
+  if (!rows.length) return [];
+  const byDay = new Map(rows.map((row) => [row.day, row]));
+  const toDate = (key) => { const [year, month, day] = key.split('-').map(Number); return new Date(Date.UTC(year, month - 1, day)); };
+  const days = [];
+  for (let cursor = toDate(rows[0].day), end = toDate(rows[rows.length - 1].day); cursor <= end; cursor = new Date(cursor.getTime() + 86_400_000)) {
+    const key = cursor.toISOString().slice(0, 10);
+    days.push({ day: key, created: byDay.get(key)?.created || 0, closed: byDay.get(key)?.closed || 0 });
+  }
+  return days.slice(-MAX_DAYS);
+}
+
 export async function summary(filters) {
   const { where, params } = buildTicketWhere(filters);
-  const [totals, monthly, categories, priorities, resolution, agents, satisfaction] = await Promise.all([
+  const [totals, monthly, categories, priorities, resolution, agents, satisfaction, daily] = await Promise.all([
     pool.query(
       `SELECT COUNT(*)::INTEGER AS total,
         COUNT(*) FILTER (WHERE t.status = 'Abierto')::INTEGER AS open,
@@ -57,7 +74,11 @@ export async function summary(filters) {
        ${where} AND t.assigned_to IS NOT NULL
        GROUP BY u.id, u.name ORDER BY closed DESC, assigned DESC, u.name ASC`, params),
     pool.query(
-      `SELECT r.rating, COUNT(*)::INTEGER AS total FROM tickets t JOIN ticket_ratings r ON r.ticket_id = t.id ${where} GROUP BY r.rating`, params)
+      `SELECT r.rating, COUNT(*)::INTEGER AS total FROM tickets t JOIN ticket_ratings r ON r.ticket_id = t.id ${where} GROUP BY r.rating`, params),
+    pool.query(
+      `SELECT TO_CHAR(t.created_at AT TIME ZONE $1, 'YYYY-MM-DD') AS day, COUNT(*)::INTEGER AS created,
+        COUNT(*) FILTER (WHERE t.status = 'Cerrado')::INTEGER AS closed
+       FROM tickets t ${where} GROUP BY 1 ORDER BY 1`, params)
   ]);
 
   const stars = [5, 4, 3, 2, 1].map((rating) => ({ rating, total: satisfaction.rows.find((row) => row.rating === rating)?.total || 0 }));
@@ -69,6 +90,7 @@ export async function summary(filters) {
     filters: filters,
     totals: { ...totals.rows[0], average_resolution_hours: round1(totals.rows[0].average_resolution_hours) },
     by_month: fillMonths(monthly.rows),
+    by_day: fillDays(daily.rows),
     by_category: categories.rows,
     by_priority: priorityOrder.map((priority) => ({ priority, total: priorities.rows.find((row) => row.priority === priority)?.total || 0 })),
     resolution_by_priority: priorityOrder.map((priority) => {
@@ -80,7 +102,7 @@ export async function summary(filters) {
   };
 }
 
-// Filas listas para el CSV (la zona horaria ya aplicada a las fechas).
+// Filas listas para el CSV y el Excel (la zona horaria ya aplicada a las fechas).
 export async function exportRows(filters) {
   const { where, params } = buildTicketWhere(filters);
   const { rows } = await pool.query(
@@ -89,6 +111,9 @@ export async function exportRows(filters) {
         TO_CHAR(t.created_at AT TIME ZONE $1, 'YYYY-MM-DD HH24:MI') AS created_at,
         CASE WHEN t.status = 'Cerrado' THEN TO_CHAR(t.updated_at AT TIME ZONE $1, 'YYYY-MM-DD HH24:MI') END AS closed_at,
         CASE WHEN t.status = 'Cerrado' THEN ROUND((${HOURS})::NUMERIC, 1) END AS resolution_hours,
+        ${SLA_HOURS_SQL} AS sla_hours,
+        CASE WHEN t.status = 'Cerrado' THEN (CASE WHEN t.updated_at > ${SLA_DUE_SQL} THEN 'Resuelto fuera de plazo' ELSE 'Resuelto a tiempo' END)
+             WHEN NOW() > ${SLA_DUE_SQL} THEN 'Vencido' ELSE 'En plazo' END AS sla_state,
         r.rating, r.comment AS rating_comment
        FROM tickets t JOIN users requester ON requester.id = t.user_id LEFT JOIN users agent ON agent.id = t.assigned_to
        LEFT JOIN ticket_ratings r ON r.ticket_id = t.id

@@ -4004,3 +4004,32 @@ body {
   .app-shell .knowledge-select select { flex: 1; max-width: none; }
 }
 @media (prefers-reduced-motion: reduce) { .app-shell .knowledge-toolbar { animation: none; } }
+
+/* Barra de filtros de tickets (reutiliza .knowledge-toolbar, .knowledge-search y .knowledge-select) */
+.app-shell .ticket-toolbar { flex-direction: column; align-items: stretch; gap: 14px; }
+.app-shell .ticket-toolbar-top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.app-shell .ticket-toolbar-top .knowledge-search { flex: 1 1 320px; }
+.app-shell .ticket-toolbar-top .knowledge-toolbar-meta { margin-left: auto; }
+.app-shell .ticket-filters { justify-content: flex-start; margin-left: 0; }
+.app-shell .ticket-filters .knowledge-select { min-height: 48px; }
+.app-shell .ticket-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 54px; padding: 0 18px; background: #ffffff; border: 1px solid var(--sw-border); border-radius: 14px; box-shadow: 0 4px 15px rgba(3, 25, 38, 0.035); color: #3d5f66; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; transition: border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease; }
+.app-shell .ticket-toggle:hover { border-color: #9dbebb; }
+.app-shell .ticket-toggle:focus-visible { outline: none; box-shadow: 0 0 0 4px rgba(61, 112, 119, 0.14); }
+.app-shell .ticket-toggle.active { background: #3d7077; border-color: #3d7077; color: #ffffff; }
+.app-shell .ticket-more { display: flex; justify-content: center; padding: 14px; border-top: 1px solid #edf0ec; }
+@media (max-width: 640px) { .app-shell .ticket-toolbar-top .knowledge-toolbar-meta { margin-left: 0; } .app-shell .ticket-filters .knowledge-select { flex: 1 1 100%; } }
+
+/* Selector Mes / Día de la gráfica "Tickets por mes" */
+.app-shell .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.app-shell .chart-panel .chart-head h3 { margin: 0; }
+.app-shell .segmented { display: inline-flex; padding: 3px; background: #eef3f1; border: 1px solid #dbe5e1; border-radius: 10px; }
+.app-shell .segmented button { border: 0; background: transparent; padding: 6px 14px; border-radius: 7px; color: #52676b; font-size: 12px; font-weight: 700; cursor: pointer; transition: background 150ms ease, color 150ms ease; }
+.app-shell .segmented button:hover:not(.active) { color: #163b43; }
+.app-shell .segmented button:focus-visible { outline: 2px solid #468189; outline-offset: 1px; }
+.app-shell .segmented button.active { background: #ffffff; color: #2f6168; box-shadow: 0 1px 4px rgba(3, 25, 38, 0.12); }
+/* Vista por día: columnas más angostas y desplazamiento horizontal si hay muchos días */
+.app-shell .month-chart.is-daily { gap: 4px; }
+.app-shell .month-chart.is-daily .month-col { flex: 1 0 30px; }
+.app-shell .month-chart.is-daily .month-bar { max-width: 11px; }
+.app-shell .month-chart.is-daily .month-bar em { top: -14px; font-size: 9px; }
+.app-shell .month-col .month-tag { min-height: 12px; margin-top: -4px; color: #8a9b9e; font-size: 10px; text-transform: capitalize; }

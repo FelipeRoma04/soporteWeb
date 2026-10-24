@@ -19,6 +19,8 @@ import Settings from './pages/Settings.jsx';
 import Reports from './pages/Reports.jsx';
 import ArticleDetail from './pages/ArticleDetail.jsx';
 import SlaBadge from './components/SlaBadge.jsx';
+import TicketToolbar from './components/TicketToolbar.jsx';
+import { INITIAL_TICKET_VIEW, applyTicketView } from './utils/ticketView.js';
 
 
 function Badge({ children, tone = 'neutral' }) { return <span className={`badge-soft ${tone}`}>{children}</span>; }
@@ -40,6 +42,7 @@ export default function App() {
   const [loadError, setLoadError] = useState('');
   const [dataLoading, setDataLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [ticketView, setTicketView] = useState(INITIAL_TICKET_VIEW);
   const [showForm, setShowForm] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState(null);
   const [notice, setNotice] = useState('');
@@ -97,6 +100,8 @@ export default function App() {
 
   function logout() {
     setSelectedTicketId(null);
+    setTicketView(INITIAL_TICKET_VIEW);
+    setSearch('');
     endSession();
   }
 
@@ -180,6 +185,7 @@ export default function App() {
   }
 
   const canManageTickets = ['agent', 'admin'].includes(user?.role);
+  const visibleTickets = applyTicketView(tickets, { ...ticketView, search }, user, canManageTickets); // lista de «Mis tickets» con filtros y orden
   const selectedTicket = tickets.find((ticket) => ticket.dbId === selectedTicketId);
   const ticketCategories = categories.length ? categories.map((category) => category.name) : ['General'];
 
@@ -212,7 +218,7 @@ export default function App() {
           </div>
         </div>
       </Dashboard>}
-      {active === 'Mis tickets' && <TicketList tickets={filtered} onNew={() => setShowForm(true)} canManageTickets={canManageTickets} onStatusChange={changeTicketStatus} onOpen={setSelectedTicketId} />}
+      {active === 'Mis tickets' && <TicketList tickets={visibleTickets} allTickets={tickets} view={ticketView} onView={setTicketView} search={search} onSearch={setSearch} onNew={() => setShowForm(true)} canManageTickets={canManageTickets} onStatusChange={changeTicketStatus} onOpen={setSelectedTicketId} />}
       {active === 'Base de conocimiento' && <Knowledge articles={articles} categories={categories} isAdmin={user?.role === 'admin'} onCreate={async (article) => { const response = await createKnowledge(article); setArticles((current) => [response.data, ...current]); }} />}
       {active === 'Asistente IA' && <Assistant categories={categories} onTicketCreated={refreshTicketData} />}
       {active === 'Usuarios' && user?.role === 'admin' && <Users users={users} currentUserId={user.id} onRoleChange={changeUserRole} onStatusChange={changeUserStatus} />}
@@ -226,8 +232,21 @@ export default function App() {
 }
 
 function PanelHeader({ title, action, onAction }) { return <div className="panel-header"><h3>{title}</h3>{action && <button className="text-button" onClick={onAction}>{action} →</button>}</div>; }
-function TicketList({ tickets, onNew, canManageTickets, onStatusChange, onOpen }) { return <section className="page-body"><div className="welcome-row"><div><p className="eyebrow">SEGUIMIENTO</p><h2>{canManageTickets ? 'Gestión de tickets' : 'Mis tickets'}</h2><p className="muted">{canManageTickets ? 'Revisa y actualiza las solicitudes de todos los usuarios.' : 'Consulta el avance de tus solicitudes.'}</p></div><button className="primary-button" onClick={onNew}><Plus size={17} />Nuevo ticket</button></div><div className="panel ticket-panel"><div className="table-wrap"><TicketTable tickets={tickets} canManageTickets={canManageTickets} onStatusChange={onStatusChange} onOpen={onOpen} /></div></div></section>; }
-function TicketTable({ tickets, canManageTickets, onStatusChange, onOpen }) {
+const PAGE_SIZE = 20;
+function TicketList({ tickets, allTickets, view, onView, search, onSearch, onNew, canManageTickets, onStatusChange, onOpen }) {
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  useEffect(() => { setLimit(PAGE_SIZE); }, [view, search]); // al cambiar un filtro se vuelve a la primera página
+  const noMatches = allTickets.length > 0 && tickets.length === 0;
+  return <section className="page-body">
+    <div className="welcome-row"><div><p className="eyebrow">SEGUIMIENTO</p><h2>{canManageTickets ? 'Gestión de tickets' : 'Mis tickets'}</h2><p className="muted">{canManageTickets ? 'Revisa y actualiza las solicitudes de todos los usuarios.' : 'Consulta el avance de tus solicitudes.'}</p></div><button className="primary-button" onClick={onNew}><Plus size={17} />Nuevo ticket</button></div>
+    <TicketToolbar tickets={allTickets} view={view} search={search} onChange={onView} onSearch={onSearch} shown={tickets.length} isStaff={canManageTickets} />
+    <div className="panel ticket-panel">
+      <div className="table-wrap"><TicketTable tickets={tickets.slice(0, limit)} canManageTickets={canManageTickets} onStatusChange={onStatusChange} onOpen={onOpen} emptyText={noMatches ? 'Ningún ticket coincide con estos filtros. Usa «Limpiar» para quitarlos.' : undefined} /></div>
+      {tickets.length > limit && <div className="ticket-more"><button type="button" className="text-button" onClick={() => setLimit((current) => current + PAGE_SIZE)}>Mostrar más ({tickets.length - limit} restantes) ↓</button></div>}
+    </div>
+  </section>;
+}
+function TicketTable({ tickets, canManageTickets, onStatusChange, onOpen, emptyText = 'No hay tickets que mostrar.' }) {
   return <table className="ticket-table">
     <thead><tr><th>Ticket</th><th>Asunto</th>{canManageTickets && <th>Solicitante</th>}<th>Categoría</th><th>Prioridad</th><th>Estado</th><th>Fecha</th></tr></thead>
     <tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.id}>
@@ -246,7 +265,7 @@ function TicketTable({ tickets, canManageTickets, onStatusChange, onOpen }) {
       <td data-label="Prioridad"><Badge tone={priorityTone(ticket.priority)}>{ticket.priority}</Badge></td>
       <td data-label="Estado">{canManageTickets ? <StatusPicker value={ticket.status} onChange={(status) => onStatusChange(ticket.dbId, status)} /> : <Badge tone={statusTone(ticket.status)}>{ticket.status}</Badge>}</td>
       <td data-label="Fecha" className="muted">{ticket.date}</td>
-    </tr>) : <tr className="table-empty-row"><td colSpan={canManageTickets ? 7 : 6}>No hay tickets que mostrar.</td></tr>}</tbody>
+    </tr>) : <tr className="table-empty-row"><td colSpan={canManageTickets ? 7 : 6}>{emptyText}</td></tr>}</tbody>
   </table>;
 }
 function Knowledge({ articles, categories, isAdmin, onCreate }) {
