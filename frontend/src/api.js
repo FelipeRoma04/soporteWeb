@@ -1,6 +1,29 @@
 import axios from 'axios';
 
 export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api' });
+
+export function getApiErrorDiagnostic(error) {
+  const config = error?.config;
+  const method = String(config?.method || 'GET').toUpperCase();
+  const baseURL = String(config?.baseURL || window.location.origin).replace(/\/+$/, '');
+  const requestPath = String(config?.url || '').replace(/^\/+/, '');
+  let path = requestPath.split('?')[0];
+
+  try {
+    path = new URL(`${baseURL}/${requestPath}`, window.location.origin).pathname;
+  } catch {
+    // Retain the relative request path when an invalid base URL prevents parsing.
+  }
+
+  path = path.replace(/\/\d+(?=\/|$)/g, '/:id');
+
+  const status = error?.response?.status;
+  const code = error?.response?.data?.code;
+  const safeCode = typeof code === 'string' && /^[A-Z0-9]{5}$/.test(code) ? ` (código ${code})` : '';
+
+  if (status) return `Diagnóstico (desarrollo): ${method} ${path} respondió HTTP ${status}${safeCode}.`;
+  return `Diagnóstico (desarrollo): ${method} ${path} no recibió respuesta HTTP${error?.code === 'ERR_NETWORK' ? ' (posible problema de red o CORS)' : ''}.`;
+}
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('soporte_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -9,6 +32,7 @@ api.interceptors.request.use((config) => {
 // Si el token vence o deja de ser válido, avisa para cerrar la sesión y volver al login.
 api.interceptors.response.use((response) => response, (error) => {
   const isCredentialRequest = ['/auth/login', '/auth/register'].includes(error.config?.url);
+  if (import.meta.env.DEV) console.error('[SysPulse API]', getApiErrorDiagnostic(error));
   if (error.response?.status === 401 && !isCredentialRequest) window.dispatchEvent(new Event('soporte:session-expired'));
   return Promise.reject(error);
 });

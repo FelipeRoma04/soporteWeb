@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BookOpen, Bot, Plus, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import KnowledgeToolbar from './components/KnowledgeToolbar.jsx';
 import { INITIAL_VIEW, applyView } from './utils/knowledgeView.js';
-import { createCategory, deleteCategory, getCategories, getDashboard, getUsers, updateUserRole, updateUserStatus } from './api.js';
+import { createCategory, deleteCategory, getApiErrorDiagnostic, getCategories, getDashboard, getUsers, updateUserRole, updateUserStatus } from './api.js';
 import { analyzeTicket, askAssistant, sendAssistantFeedback } from './services/aiService.js';
 import { createKnowledge, getKnowledge } from './services/knowledgeService.js';
 import { createTicket, getTickets, rateTicket, updateTicketStatus } from './services/ticketService.js';
@@ -78,7 +78,9 @@ export default function App() {
         setUsers(usersResponse.data);
         setLoadError('');
       })
-      .catch(() => setLoadError('No se pudieron cargar los datos de la base de datos.'))
+      .catch((error) => setLoadError(import.meta.env.DEV
+        ? `No se pudieron cargar los datos de la base de datos. ${getApiErrorDiagnostic(error)}`
+        : 'No se pudieron cargar los datos de la base de datos.'))
       .finally(() => setDataLoading(false));
   }, [authenticated, ready]);
 
