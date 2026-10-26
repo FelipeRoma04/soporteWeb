@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import BrandIdentity from '../components/BrandIdentity.jsx';
 import { login, register } from '../services/authService.js';
 
-export default function Login({ onAuth }) {
-	const [mode, setMode] = useState('login');
+export default function Login({ onAuth, initialMode = 'login', onBack }) {
+	const [mode, setMode] = useState(initialMode);
 	const [error, setError] = useState('');
 	const [loading, setLoading] = useState(false);
 
@@ -21,5 +22,5 @@ export default function Login({ onAuth }) {
 		} finally { setLoading(false); }
 	}
 
-	return <div className="auth-shell"><div className="auth-visual"><BrandIdentity className="auth-brand" /><div className="auth-quote"><p>“Resolver un problema empieza por saber que no estás solo.”</p><span>Mesa de soporte, siempre cerca</span></div></div><div className="auth-form-wrap"><form className="auth-form" onSubmit={submit}><span className="eyebrow">SYSPULSE · CENTRO DE ASISTENCIA</span><h1>{mode === 'login' ? 'Bienvenida de nuevo' : 'Crea tu cuenta'}</h1><p className="muted">{mode === 'login' ? 'Accede para revisar tus solicitudes.' : 'Gestiona tus solicitudes en un solo lugar.'}</p>{mode === 'register' && <label>Nombre completo<input name="name" required placeholder="María Cruz" /></label>}<label>Correo electrónico<input name="email" required type="email" placeholder="tu@empresa.com" /></label><label>Contraseña<input name="password" required minLength="8" type="password" placeholder="8 caracteres mínimo" /></label>{error && <p className="auth-error">{error}</p>}<button className="primary-button auth-submit" disabled={loading}>{loading ? 'Conectando...' : mode === 'login' ? 'Iniciar sesión' : 'Registrarme'} <span>→</span></button><div className="auth-switch">{mode === 'login' ? '¿Aún no tienes una cuenta?' : '¿Ya tienes una cuenta?'} <button type="button" onClick={() => { setError(''); setMode(mode === 'login' ? 'register' : 'login'); }}>{mode === 'login' ? 'Regístrate' : 'Inicia sesión'}</button></div></form></div></div>;
+	return <div className="auth-shell"><div className="auth-visual"><BrandIdentity className="auth-brand" /><div className="auth-quote"><p>“Resolver un problema empieza por saber que no estás solo.”</p><span>Mesa de soporte, siempre cerca</span></div></div><div className="auth-form-wrap"><form className="auth-form" onSubmit={submit}>{onBack && <button type="button" className="auth-back" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" /><span>Volver a SysPulse</span></button>}<span className="eyebrow">SYSPULSE · CENTRO DE ASISTENCIA</span><h1>{mode === 'login' ? 'Bienvenida de nuevo' : 'Crea tu cuenta'}</h1><p className="muted">{mode === 'login' ? 'Accede para revisar tus solicitudes.' : 'Gestiona tus solicitudes en un solo lugar.'}</p>{mode === 'register' && <label>Nombre completo<input name="name" required placeholder="María Cruz" /></label>}<label>Correo electrónico<input name="email" required type="email" placeholder="tu@empresa.com" /></label><label>Contraseña<input name="password" required minLength="8" type="password" placeholder="8 caracteres mínimo" /></label>{error && <p className="auth-error">{error}</p>}<button className="primary-button auth-submit" disabled={loading}>{loading ? 'Conectando...' : mode === 'login' ? 'Iniciar sesión' : 'Registrarme'} <span>→</span></button><div className="auth-switch">{mode === 'login' ? '¿Aún no tienes una cuenta?' : '¿Ya tienes una cuenta?'} <button type="button" onClick={() => { setError(''); setMode(mode === 'login' ? 'register' : 'login'); }}>{mode === 'login' ? 'Regístrate' : 'Inicia sesión'}</button></div></form></div></div>;
 }

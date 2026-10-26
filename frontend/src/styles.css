@@ -1537,6 +1537,38 @@ button:disabled {
   letter-spacing: -0.9px;
 }
 
+.auth-back {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 19px;
+  padding: 0 13px;
+  border: 1px solid var(--sw-border);
+  border-radius: 10px;
+  color: var(--sw-charcoal);
+  background: var(--sw-background);
+  font: 600 12px 'DM Sans', sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease, background-color 150ms ease;
+}
+
+.auth-back:hover {
+  border-color: var(--sw-orange);
+  color: var(--sw-orange-dark);
+  background: var(--sw-surface);
+}
+
+.auth-back:active {
+  background: color-mix(in srgb, var(--sw-orange) 8%, var(--sw-background));
+}
+
+.auth-back:focus-visible {
+  outline: 2px solid var(--sw-orange);
+  outline-offset: 3px;
+}
+
 .auth-form > .muted {
   margin: 0 0 26px;
 }

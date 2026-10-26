@@ -9,6 +9,7 @@ import { createTicket, getTickets, rateTicket, updateTicketStatus } from './serv
 import { getNotifications, markAllNotificationsAsRead, markNotificationAsRead } from './services/notificationService.js';
 import { useAuth } from './context/AuthContext.jsx';
 import MainLayout from './layouts/MainLayout.jsx';
+import Landing from './pages/Landing.jsx';
 import StatusPicker from './components/StatusPicker.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import { formatRole } from './utils/roles.js';
@@ -33,6 +34,7 @@ function formatTicket(ticket) {
 export default function App() {
   const { authenticated, ready, user, startSession, endSession } = useAuth();
   const [active, setActive] = useState('Resumen');
+  const [authMode, setAuthMode] = useState('landing');
   const [tickets, setTickets] = useState([]);
   const [stats, setStats] = useState({ total: 0, open: 0, closed: 0 });
   const [articles, setArticles] = useState([]);
@@ -97,10 +99,20 @@ export default function App() {
     getCategories().then((response) => setCategories(response.data)).catch(() => {});
   }, [active, authenticated, ready]);
 
-  if (!authenticated) return <Login onAuth={startSession} />;
+  if (!authenticated) {
+    if (authMode === 'landing') {
+      return <Landing onLogin={() => setAuthMode('login')} onRegister={() => setAuthMode('register')} />;
+    }
+    return <Login
+      initialMode={authMode}
+      onAuth={startSession}
+      onBack={() => setAuthMode('landing')}
+    />;
+  }
   if (!ready) return <div className="notice">Verificando sesión...</div>;
 
   function logout() {
+    setAuthMode('landing');
     setSelectedTicketId(null);
     setTicketView(INITIAL_TICKET_VIEW);
     setSearch('');
