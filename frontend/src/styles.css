@@ -4065,3 +4065,76 @@ body {
 .app-shell .month-chart.is-daily .month-bar { max-width: 11px; }
 .app-shell .month-chart.is-daily .month-bar em { top: -14px; font-size: 9px; }
 .app-shell .month-col .month-tag { min-height: 12px; margin-top: -4px; color: #8a9b9e; font-size: 10px; text-transform: capitalize; }
+
+.article-detail-backdrop {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: clamp(12px, 3vh, 28px) 16px;
+  background: rgba(16, 34, 36, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.article-detail-panel {
+  width: min(680px, 100%);
+  max-width: 680px;
+  max-height: min(90vh, 840px);
+  max-height: min(90dvh, 840px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid rgba(16, 52, 58, 0.12);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 28px 90px rgba(4, 25, 30, 0.3);
+  scrollbar-gutter: stable;
+}
+
+.article-detail-panel:focus {
+  outline: none;
+}
+
+.article-detail-panel .modal-heading {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.article-detail-panel .modal-heading h2 {
+  overflow-wrap: anywhere;
+}
+
+.article-detail-panel .close-button {
+  flex: 0 0 auto;
+}
+
+.article-detail-content {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.article-detail-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+@media (max-width: 600px) {
+  .article-detail-backdrop {
+    padding: 8px;
+  }
+
+  .article-detail-panel {
+    width: 100%;
+    max-height: 92vh;
+    max-height: 92dvh;
+    padding: 22px 18px max(22px, env(safe-area-inset-bottom));
+    border-radius: 18px 18px 12px 12px;
+  }
+}

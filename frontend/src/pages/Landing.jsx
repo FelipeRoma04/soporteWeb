@@ -87,16 +87,21 @@ const steps = [
 ];
 
 const benefits = [
-  'Menos información dispersa entre distintos canales.',
-  'Mayor claridad sobre el estado de las solicitudes.',
-  'Historial disponible para revisar cada atención.',
-  'Reutilización de soluciones documentadas.',
-  'Apoyo de IA a la clasificación, con revisión del personal de soporte.'
+  'Información de cada solicitud reunida en un espacio común.',
+  'Estado y responsable visibles durante la atención.',
+  'Historial disponible para revisar el avance de cada caso.',
+  'Prioridades organizadas para facilitar la revisión.',
+  'Soluciones documentadas que pueden volver a consultarse.',
+  'Sugerencias orientativas de IA revisadas por el equipo.'
 ];
 
 export default function Landing({ onLogin, onRegister }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState('inicio');
+  const [activeStep, setActiveStep] = useState(0);
   const landingRef = useRef(null);
+  const headerRef = useRef(null);
+  const progressRef = useRef(null);
 
   useEffect(() => {
     const root = landingRef.current;
@@ -111,14 +116,122 @@ export default function Landing({ onLogin, onRegister }) {
     root.classList.add('has-reveal');
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        entry.target.classList.add('is-visible');
-        observer.unobserve(entry.target);
+        entry.target.classList.toggle('is-visible', entry.isIntersecting);
       });
     }, { threshold: 0.12, rootMargin: '0px 0px -35px 0px' });
 
     revealItems.forEach((item) => observer.observe(item));
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const root = landingRef.current;
+    if (!root) return undefined;
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let frameId = 0;
+    let lastProgressValue = -1;
+    let currentActiveSection = 'inicio';
+    let currentActiveStep = 0;
+    let parallaxLayers = [];
+    let navSections = [];
+    let storySteps = [];
+
+    function measureLayers() {
+      parallaxLayers = [...root.querySelectorAll('[data-parallax]')].map((element) => ({
+        element,
+        top: element.getBoundingClientRect().top + window.scrollY,
+        height: element.offsetHeight,
+        distance: Number(element.dataset.parallax) || 0,
+        scaleRange: Number(element.dataset.parallaxScale) || 0
+      }));
+      navSections = [...root.querySelectorAll('[data-nav-section]')].map((element) => ({
+        element,
+        top: element.getBoundingClientRect().top + window.scrollY
+      }));
+      storySteps = [...root.querySelectorAll('[data-story-step]')].map((element) => ({
+        element,
+        top: element.getBoundingClientRect().top + window.scrollY,
+        height: element.offsetHeight
+      }));
+      updateOnScroll();
+    }
+
+    function updateOnScroll() {
+      if (frameId) return;
+      frameId = window.requestAnimationFrame(() => {
+        frameId = 0;
+        const scrollableHeight = document.documentElement.scrollHeight - window.innerHeight;
+        const progress = scrollableHeight > 0 ? Math.min(1, Math.max(0, window.scrollY / scrollableHeight)) : 0;
+        const percent = Math.round(progress * 100);
+        if (progressRef.current) {
+          progressRef.current.style.transform = `scaleX(${progress})`;
+          if (percent !== lastProgressValue) {
+            progressRef.current.setAttribute('aria-valuenow', String(percent));
+            lastProgressValue = percent;
+          }
+        }
+        headerRef.current?.classList.toggle('is-scrolled', window.scrollY > 24);
+
+        const viewportHeight = window.innerHeight;
+        const activePosition = window.scrollY + viewportHeight * 0.3;
+        const activeSection = navSections.reduce((current, section) => (
+          section.top <= activePosition ? section : current
+        ), navSections[0]);
+        if (activeSection && activeSection.element.id !== currentActiveSection) {
+          currentActiveSection = activeSection.element.id;
+          setActiveSection(currentActiveSection);
+        }
+
+        const storyPosition = window.scrollY + viewportHeight * 0.5;
+        if (storySteps.length && storyPosition >= storySteps[0].top
+          && storyPosition <= storySteps[storySteps.length - 1].top + storySteps[storySteps.length - 1].height) {
+          let closestStep = 0;
+          let closestDistance = Number.POSITIVE_INFINITY;
+          storySteps.forEach((step, index) => {
+            const distance = Math.abs(storyPosition - (step.top + step.height / 2));
+            if (distance < closestDistance) {
+              closestDistance = distance;
+              closestStep = index;
+            }
+          });
+          if (closestStep !== currentActiveStep) {
+            currentActiveStep = closestStep;
+            setActiveStep(closestStep);
+          }
+        }
+
+        parallaxLayers.forEach(({ element, top, height, distance, scaleRange }) => {
+          const progressThroughView = Math.min(1, Math.max(0, (window.scrollY + viewportHeight - top) / (height + viewportHeight)));
+          if (reducedMotion.matches || distance === 0) {
+            element.style.setProperty('--parallax-offset', '0px');
+          } else {
+            const mobileFactor = window.innerWidth <= 760 ? 0.35 : 1;
+            const offset = (0.5 - progressThroughView) * distance * mobileFactor;
+            element.style.setProperty('--parallax-offset', `${offset.toFixed(1)}px`);
+          }
+          const scaleOffset = reducedMotion.matches || window.innerWidth <= 760 ? 0 : (progressThroughView - 0.5) * scaleRange;
+          element.style.setProperty('--parallax-scale', (1 + scaleOffset).toFixed(3));
+        });
+      });
+    }
+
+    measureLayers();
+    window.addEventListener('scroll', updateOnScroll, { passive: true });
+    window.addEventListener('resize', measureLayers, { passive: true });
+    reducedMotion.addEventListener('change', updateOnScroll);
+
+    return () => {
+      window.removeEventListener('scroll', updateOnScroll);
+      window.removeEventListener('resize', measureLayers);
+      reducedMotion.removeEventListener('change', updateOnScroll);
+      if (frameId) window.cancelAnimationFrame(frameId);
+      root.querySelectorAll('[data-parallax]').forEach((element) => element.style.removeProperty('--parallax-offset'));
+      if (progressRef.current) {
+        progressRef.current.style.removeProperty('transform');
+        progressRef.current.setAttribute('aria-valuenow', '0');
+      }
+    };
   }, []);
 
   function closeMenu() {
@@ -144,7 +257,16 @@ export default function Landing({ onLogin, onRegister }) {
 
   return (
     <main className="landing" ref={landingRef}>
-      <header className="landing-header">
+      <div
+        className="landing-scroll-progress"
+        ref={progressRef}
+        role="progressbar"
+        aria-label="Progreso de lectura"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+      />
+      <header className="landing-header" ref={headerRef}>
         <div className="landing-header-inner">
           <a className="landing-logo" href="#inicio" aria-label="SysPulse, ir al inicio" onClick={(event) => openSection(event, 'inicio')}>
             <BrandIdentity className="landing-brand" showTagline={false} />
@@ -166,11 +288,11 @@ export default function Landing({ onLogin, onRegister }) {
             id="landing-navigation"
             aria-label="Navegación de la página"
           >
-            <a href="#inicio" onClick={(event) => openSection(event, 'inicio')}>Inicio</a>
-            <a href="#funciones" onClick={(event) => openSection(event, 'funciones')}>Funciones</a>
-            <a href="#como-funciona" onClick={(event) => openSection(event, 'como-funciona')}>Cómo funciona</a>
-            <a href="#asistente" onClick={(event) => openSection(event, 'asistente')}>Asistente IA</a>
-            <a href="#beneficios" onClick={(event) => openSection(event, 'beneficios')}>Beneficios</a>
+            <a className={activeSection === 'inicio' ? 'is-active' : ''} aria-current={activeSection === 'inicio' ? 'location' : undefined} href="#inicio" onClick={(event) => openSection(event, 'inicio')}>Inicio</a>
+            <a className={activeSection === 'funciones' ? 'is-active' : ''} aria-current={activeSection === 'funciones' ? 'location' : undefined} href="#funciones" onClick={(event) => openSection(event, 'funciones')}>Funciones</a>
+            <a className={activeSection === 'como-funciona' ? 'is-active' : ''} aria-current={activeSection === 'como-funciona' ? 'location' : undefined} href="#como-funciona" onClick={(event) => openSection(event, 'como-funciona')}>Cómo funciona</a>
+            <a className={activeSection === 'asistente' ? 'is-active' : ''} aria-current={activeSection === 'asistente' ? 'location' : undefined} href="#asistente" onClick={(event) => openSection(event, 'asistente')}>Asistente IA</a>
+            <a className={activeSection === 'beneficios' ? 'is-active' : ''} aria-current={activeSection === 'beneficios' ? 'location' : undefined} href="#beneficios" onClick={(event) => openSection(event, 'beneficios')}>Beneficios</a>
             <div className="landing-nav-actions">
               <button className="landing-button landing-button-quiet" type="button" onClick={openLogin}>Iniciar sesión</button>
               <button className="landing-button landing-button-primary landing-button-small" type="button" onClick={openRegister}>Registrarse</button>
@@ -179,10 +301,10 @@ export default function Landing({ onLogin, onRegister }) {
         </div>
       </header>
 
-      <section className="landing-hero" id="inicio" aria-labelledby="landing-title">
+      <section className="landing-hero" id="inicio" data-nav-section aria-labelledby="landing-title">
         <div className="landing-hero-copy">
           <span className="landing-eyebrow"><span className="landing-eyebrow-dot" />Soporte tecnológico en un solo lugar</span>
-          <h1 id="landing-title">Cada solicitud, <span>bajo control</span></h1>
+          <h1 id="landing-title" aria-label="Cada solicitud, bajo control"><span className="landing-title-line" aria-hidden="true"><span className="landing-title-word"><span>Cada</span></span>{' '}<span className="landing-title-word"><span>solicitud,</span></span>{' '}<span className="landing-title-highlight"><span className="landing-title-word"><span>bajo</span></span>{' '}<span className="landing-title-word"><span>control</span></span></span></span></h1>
           <p className="landing-hero-description">
             Registra problemas, organiza su atención y consulta el avance de cada solicitud sin perder información por el camino.
           </p>
@@ -200,7 +322,7 @@ export default function Landing({ onLogin, onRegister }) {
           </ul>
         </div>
 
-        <div className="landing-hero-art" aria-label="Representación ilustrativa de un ticket de SysPulse">
+        <div className="landing-hero-art" data-parallax="34" data-parallax-scale="0.035" aria-label="Representación ilustrativa de un ticket de SysPulse">
           <div className="landing-art-orbit landing-art-orbit-one" />
           <div className="landing-art-orbit landing-art-orbit-two" />
           <div className="landing-product-window">
@@ -244,7 +366,7 @@ export default function Landing({ onLogin, onRegister }) {
         </div>
       </section>
 
-      <section className="landing-section landing-features" id="funciones" aria-labelledby="features-title">
+      <section className="landing-section landing-features" id="funciones" data-nav-section aria-labelledby="features-title">
         <div className="landing-section-heading" data-reveal>
           <span className="landing-eyebrow">FUNCIONES DISPONIBLES EN EL PROTOTIPO</span>
           <h2 id="features-title">¿Qué puedes hacer con SysPulse?</h2>
@@ -262,26 +384,39 @@ export default function Landing({ onLogin, onRegister }) {
         </div>
       </section>
 
-      <section className="landing-workflow" id="como-funciona" aria-labelledby="workflow-title">
+      <section className="landing-workflow" id="como-funciona" data-nav-section aria-labelledby="workflow-title">
         <div className="landing-section landing-workflow-inner">
-          <div className="landing-section-heading landing-workflow-heading" data-reveal>
+          <div className="landing-story-heading" data-reveal>
             <span className="landing-eyebrow">UN FLUJO DE ATENCIÓN CLARO</span>
             <h2 id="workflow-title">Cómo funciona</h2>
-            <p>Un flujo directo para registrar solicitudes y darles seguimiento.</p>
+            <p>Un recorrido desde el registro hasta el seguimiento de cada solicitud.</p>
           </div>
-          <ol className="landing-steps" data-reveal>
-            {steps.map((step) => (
-              <li className="landing-step" data-reveal key={step.number} style={{ '--reveal-order': Number(step.number) - 1 }}>
-                <span className="landing-step-number">{step.number}</span>
-                <h3>{step.title}</h3>
-                <p>{step.description}</p>
-              </li>
-            ))}
-          </ol>
+          <div className="landing-story-layout">
+            <div className="landing-story-copy">
+              <div className="landing-story-progress" aria-hidden="true"><span style={{ transform: `scaleY(${(activeStep + 1) / steps.length})` }} /></div>
+              <ol className="landing-story-steps">
+                {steps.map((step, index) => (
+                  <li
+                    className={`landing-story-step${activeStep === index ? ' is-active' : ''}`}
+                    data-story-step={index}
+                    key={step.number}
+                    aria-current={activeStep === index ? 'step' : undefined}
+                  >
+                    <span className="landing-step-number">{step.number}</span>
+                    <div className="landing-story-step-copy"><h3>{step.title}</h3><p>{step.description}</p></div>
+                    <StoryVisual activeStep={index} mobile />
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div className="landing-story-visual" data-parallax="-18" data-parallax-scale="0.025" data-reveal>
+              <StoryVisual activeStep={activeStep} />
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="landing-assistant-section" id="asistente" aria-labelledby="assistant-title">
+      <section className="landing-assistant-section" id="asistente" data-nav-section aria-labelledby="assistant-title">
         <div className="landing-assistant-layout">
           <div className="landing-assistant-copy" data-reveal>
             <span className="landing-eyebrow">APOYO PARA ORIENTAR LA ATENCIÓN</span>
@@ -289,7 +424,7 @@ export default function Landing({ onLogin, onRegister }) {
             <p>El asistente relaciona lo que describes con categorías y artículos de conocimiento. Sus respuestas son orientativas: el personal de soporte debe revisarlas y decidir cómo continuar.</p>
             <div className="landing-assistant-note"><ShieldCheck size={17} aria-hidden="true" /><span>La sugerencia no sustituye la revisión del equipo de soporte.</span></div>
           </div>
-          <div className="landing-assistant-demo" data-reveal>
+          <div className="landing-assistant-demo" data-reveal data-parallax="16" data-parallax-scale="0.018">
             <div className="landing-demo-topline"><span><Bot size={16} aria-hidden="true" /> Asistente SysPulse</span><span className="landing-demo-label">EJEMPLO FICTICIO</span></div>
             <div className="landing-demo-question"><small>DESCRIPCIÓN DEL PROBLEMA</small><p>“No puedo conectarme a la red Wi-Fi”.</p></div>
             <div className="landing-demo-connector" aria-hidden="true"><i /><i /><i /></div>
@@ -297,12 +432,12 @@ export default function Landing({ onLogin, onRegister }) {
               <div><span className="landing-demo-icon"><Layers3 size={16} aria-hidden="true" /></span><small>CATEGORÍA SUGERIDA</small><strong>Redes</strong></div>
               <div><span className="landing-demo-icon"><BookOpen size={16} aria-hidden="true" /></span><small>POSIBLE ORIENTACIÓN</small><strong>Revisar artículos de conexión Wi-Fi</strong></div>
             </div>
-            <p className="landing-demo-disclaimer">Sugerencia orientativa · revisar antes de aplicarla</p>
+            <p className="landing-demo-disclaimer">El equipo revisa la sugerencia antes de crear el ticket.</p>
           </div>
         </div>
       </section>
 
-      <section className="landing-section landing-benefits" id="beneficios" aria-labelledby="benefits-title">
+      <section className="landing-section landing-benefits" id="beneficios" data-nav-section aria-labelledby="benefits-title">
         <div className="landing-benefits-copy" data-reveal>
           <span className="landing-eyebrow">ATENCIÓN CON CONTEXTO</span>
           <h2 id="benefits-title">¿Por qué centralizar el soporte?</h2>
@@ -311,7 +446,7 @@ export default function Landing({ onLogin, onRegister }) {
             {benefits.map((benefit) => <li key={benefit}><span><Check size={14} aria-hidden="true" /></span>{benefit}</li>)}
           </ul>
         </div>
-        <div className="landing-organized-visual" data-reveal>
+        <div className="landing-organized-visual" data-reveal data-parallax="14" data-parallax-scale="0.02">
           <div className="landing-scattered-panel">
             <span className="landing-visual-kicker">ANTES</span>
             <h3>Información en distintos canales</h3>
@@ -332,8 +467,8 @@ export default function Landing({ onLogin, onRegister }) {
         </div>
       </section>
 
-      <section className="landing-cta-wrap" id="acceso" aria-labelledby="cta-title">
-        <div className="landing-cta">
+      <section className="landing-cta-wrap" id="acceso" data-nav-section aria-labelledby="cta-title">
+        <div className="landing-cta" data-reveal>
           <div className="landing-cta-decoration" aria-hidden="true"><ActivityIcon /></div>
           <span className="landing-eyebrow">PROTOTIPO EXPERIMENTAL UNIVERSITARIO</span>
           <h2 id="cta-title">El soporte empieza por tener todo en orden</h2>
@@ -393,4 +528,59 @@ function FeaturePreview({ type }) {
     return <div className="landing-feature-preview landing-admin-preview"><span><UsersRound size={13} aria-hidden="true" /> Usuarios</span><span><Layers3 size={13} aria-hidden="true" /> Categorías</span></div>;
   }
   return <div className="landing-feature-preview landing-report-preview"><BarChart3 size={15} aria-hidden="true" /><span>Resumen de tickets</span><i><ArrowRight size={13} aria-hidden="true" /></i></div>;
+}
+
+function StoryVisual({ activeStep, mobile = false }) {
+  const stages = [
+    { eyebrow: 'NUEVA SOLICITUD', title: 'Describe el problema', icon: Ticket },
+    { eyebrow: 'CLASIFICACIÓN', title: 'Categoría y prioridad', icon: Layers3 },
+    { eyebrow: 'ORIENTACIÓN', title: 'Sugerencia de conocimiento', icon: Bot },
+    { eyebrow: 'SEGUIMIENTO', title: 'Historial hasta el cierre', icon: CircleCheck }
+  ];
+  const stage = stages[activeStep] || stages[0];
+  const StageIcon = stage.icon;
+
+  return (
+    <div
+      className={`landing-story-scene landing-story-scene-${activeStep}${mobile ? ' is-mobile' : ''}`}
+      role={mobile ? undefined : 'img'}
+      aria-label={mobile ? undefined : `Paso ${activeStep + 1}: ${stage.title}`}
+      aria-hidden={mobile ? 'true' : undefined}
+      key={activeStep}
+    >
+      <div className="landing-story-scene-top">
+        <span><StageIcon size={16} aria-hidden="true" /> SysPulse · ejemplo</span>
+        <small>{stage.eyebrow}</small>
+      </div>
+      <div className="landing-story-scene-content">
+        <span className="landing-story-scene-icon"><StageIcon size={23} aria-hidden="true" /></span>
+        <small>{stage.eyebrow}</small>
+        <h3>{stage.title}</h3>
+        {activeStep === 0 && (
+          <div className="landing-story-detail">
+            <span>Descripción</span>
+            <strong>No puedo conectarme a la red Wi-Fi</strong>
+          </div>
+        )}
+        {activeStep === 1 && (
+          <div className="landing-story-tags"><span>Redes</span><span>Prioridad media</span></div>
+        )}
+        {activeStep === 2 && (
+          <div className="landing-story-suggestion">
+            <BookOpen size={16} aria-hidden="true" />
+            <span><small>ARTÍCULO RELACIONADO</small><strong>Revisar la conexión Wi-Fi</strong></span>
+            <i>Sugerencia</i>
+          </div>
+        )}
+        {activeStep === 3 && (
+          <div className="landing-story-timeline">
+            <span><i />Solicitud registrada</span>
+            <span><i />Atención en progreso</span>
+            <span><i />Estado actualizado</span>
+          </div>
+        )}
+      </div>
+      <div className="landing-story-scene-footer"><span /><span /><span /><small>Representación ficticia</small></div>
+    </div>
+  );
 }

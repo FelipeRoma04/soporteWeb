@@ -8,6 +8,18 @@ export default function Login({ onAuth, initialMode = 'login', onBack }) {
 	const [error, setError] = useState('');
 	const [loading, setLoading] = useState(false);
 
+	function getAuthErrorMessage(error) {
+		const status = error.response?.status;
+		if (!error.response) {
+			return error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT'
+				? 'La conexión con la API tardó demasiado. Inténtalo de nuevo.'
+				: 'No se pudo conectar con la API. Verifica que el backend esté iniciado.';
+		}
+		if (status === 401) return 'Correo o contraseña incorrectos.';
+		if (status >= 500) return 'El servidor tuvo un error interno. Inténtalo de nuevo más tarde.';
+		return error.response.data?.message || 'No se pudo completar la solicitud.';
+	}
+
 	async function submit(event) {
 		event.preventDefault();
 		setError('');
@@ -18,7 +30,7 @@ export default function Login({ onAuth, initialMode = 'login', onBack }) {
 			const response = await (mode === 'login' ? login(payload) : register(payload));
 			onAuth(response.data.user, response.data.token);
 		} catch (error) {
-			setError(error.response?.data?.message || 'No se pudo conectar con la API. Verifica el backend y tus credenciales.');
+			setError(getAuthErrorMessage(error));
 		} finally { setLoading(false); }
 	}
 
