@@ -8,10 +8,15 @@ export function normalizeArticleInput(input = {}) {
     keywords: input.keywords?.trim() || ''
   };
 }
+
 // author_name: quién publicó la guía (null si la cuenta ya no existe).
 const SELECT_WITH_AUTHOR = 'SELECT a.id, a.title, a.content, a.category, a.keywords, a.created_at, a.updated_at, u.name AS author_name FROM knowledge_articles a LEFT JOIN users u ON u.id = a.author_id';
 
-export async function listArticles() { const { rows } = await pool.query(`${SELECT_WITH_AUTHOR} ORDER BY a.updated_at DESC`); return rows; }
+export async function listArticles() {
+  const { rows } = await pool.query(`${SELECT_WITH_AUTHOR} ORDER BY a.updated_at DESC`);
+  return rows;
+}
+
 export async function createArticle(article, authorId) {
   const { rows: inserted } = await pool.query(
     'INSERT INTO knowledge_articles (author_id, title, content, category, keywords) VALUES ($1, $2, $3, $4, $5) RETURNING id',
@@ -33,29 +38,36 @@ export function extractSearchTerms(question) {
   return [...new Set((normalizedQuestion.match(/[\p{L}\p{N}]{2,}/gu) || []).filter((term) => !stopWords.has(term)))].slice(0, 8);
 }
 
+// Relevancia mínima (ts_rank) para considerar que una guía responde la pregunta. Con datos reales, las coincidencias
+// útiles dan >= 0.12 y las coincidencias casuales de una palabra suelta en el contenido dan <= 0.07.
+const MIN_RELEVANCE = 0.1;
+
 export async function searchArticles(question) {
   const terms = extractSearchTerms(question);
   if (!terms.length) return [];
 
-  const scoreExpression = terms.map((_, index) => {
-    const parameter = index * 3 + 1;
-    return `(CASE WHEN title ILIKE $${parameter} THEN 3 ELSE 0 END + CASE WHEN keywords ILIKE $${parameter + 1} THEN 2 ELSE 0 END + CASE WHEN content ILIKE $${parameter + 2} THEN 1 ELSE 0 END)`;
-  }).join(' + ');
-  const conditions = terms.map((_, index) => {
-    const parameter = terms.length * 3 + index * 3 + 1;
-    return `(title ILIKE $${parameter} OR content ILIKE $${parameter + 1} OR keywords ILIKE $${parameter + 2})`;
-  }).join(' OR ');
-  const termPatterns = terms.flatMap((term) => [`%${term}%`, `%${term}%`, `%${term}%`]);
+  // Los términos solo tienen letras y números, así que son seguros para to_tsquery.
+  // Se unen con "|" (OR): ["escritorio", "guardar"] -> "escritorio | guardar".
+  const tsQueryString = terms.join(' | ');
+
+  // Título pesa más (A) que las palabras clave (B) y el contenido (C). El documento se calcula una sola vez por fila.
   const { rows } = await pool.query(
     `SELECT id, title, content, category, relevance FROM (
-       SELECT id, title, content, category, updated_at, (${scoreExpression}) AS relevance
-       FROM knowledge_articles
-       WHERE ${conditions}
-     ) AS matches
-     WHERE relevance >= 2
+       SELECT a.id, a.title, a.content, a.category, a.updated_at, ts_rank(d.doc, q.query) AS relevance
+       FROM knowledge_articles a
+       CROSS JOIN LATERAL (
+         SELECT setweight(to_tsvector('spanish', coalesce(a.title, '')), 'A') ||
+                setweight(to_tsvector('spanish', coalesce(a.keywords, '')), 'B') ||
+                setweight(to_tsvector('spanish', coalesce(a.content, '')), 'C') AS doc
+       ) d
+       CROSS JOIN (SELECT to_tsquery('spanish', $1) AS query) q
+       WHERE d.doc @@ q.query
+     ) ranked
+     WHERE relevance >= $2
      ORDER BY relevance DESC, updated_at DESC
      LIMIT 3`,
-    [...termPatterns, ...termPatterns]
+    [tsQueryString, MIN_RELEVANCE]
   );
+
   return rows;
 }

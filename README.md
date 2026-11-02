@@ -13,13 +13,14 @@ Mesa de ayuda con tickets, comentarios, notificaciones, plazos de atención (SLA
 5. [Puesta en marcha](#puesta-en-marcha)
 6. [Roles y permisos](#roles-y-permisos)
 7. [Plazos de atención (SLA)](#plazos-de-atención-sla)
-8. [Reportes y exportación](#reportes-y-exportación)
-9. [Endpoints destacados](#endpoints-destacados)
-10. [Comandos útiles](#comandos-útiles)
-11. [Solución de problemas](#solución-de-problemas)
-12. [Seguridad](#seguridad)
-13. [Antes de publicar en internet](#antes-de-publicar-en-internet)
-14. [Despliegue gratuito](#despliegue-gratuito-github-pages--render--neon)
+8. [Asistente de IA y Búsqueda (RAG)](#asistente-de-ia-y-búsqueda-rag)
+9. [Reportes y exportación](#reportes-y-exportación)
+10. [Endpoints destacados](#endpoints-destacados)
+11. [Comandos útiles](#comandos-útiles)
+12. [Solución de problemas](#solución-de-problemas)
+13. [Seguridad](#seguridad)
+14. [Antes de publicar en internet](#antes-de-publicar-en-internet)
+15. [Despliegue gratuito](#despliegue-gratuito-github-pages--render--neon)
 
 ---
 
@@ -29,7 +30,7 @@ Mesa de ayuda con tickets, comentarios, notificaciones, plazos de atención (SLA
 - **Plazos de atención (SLA)** según la prioridad. El ticket vencido no se borra: se marca como *Vencido* y se avisa a agentes y administradores.
 - **Calificación de la atención:** 1 a 5 estrellas y comentario opcional al cerrar un ticket.
 - **Base de conocimiento** con el autor visible en cada artículo, búsqueda, filtros por categoría y autor, y orden por fecha, título, autor o categoría (todo en el navegador).
-- **Asistente de IA** que busca primero en las guías, ofrece crear un ticket si no hay solución y responde directo a saludos y charla informal.
+- **Asistente de IA** con búsqueda de texto completo (Full-Text Search nativo de PostgreSQL). Tolerancia a plurales y conjugaciones. Responde basándose estrictamente en el contexto de las guías sin inventar pasos (sin inventar pasos), ofrece crear un ticket si no hay solución y maneja la charla informal localmente.
 - **Reportes** (administrador): tickets por mes o por día, categorías más frecuentes, tiempos de resolución, prioridades, rendimiento de agentes, satisfacción y descarga en Excel (.xlsx) o CSV con filtros.
 - **Administración** de usuarios (roles y activación) y de categorías (crear y eliminar las que no se usan).
 - **Interfaz** con barra de navegación superior, tuerca de configuración en la cabecera y botón flotante del asistente.
@@ -166,10 +167,10 @@ El archivo se crea con `npm run setup` y **nunca se sube a git** (está en `.git
 | `ADMIN_EMAIL`, `ADMIN_NAME`, `ADMIN_PASSWORD` | Cuenta de administrador que crea `db:setup` (clave de mínimo 8 caracteres). |
 | `NODE_ENV` | `production` en producción: la API se niega a arrancar con el `JWT_SECRET` de ejemplo. |
 | `TRUST_PROXY` | Número de proxies inversos delante de la API (ver [producción](#antes-de-publicar-en-internet)). |
-| `AI_PROVIDER` | Proveedor de IA: `openai` (por defecto), `anthropic` o `groq`. Cualquier otro valor da error 503. |
+| `AI_PROVIDER` | Proveedor de IA: `openai` (por defecto), `anthropic` o `groq` |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | Con `AI_PROVIDER=openai`. El modelo por defecto es `gpt-4o-mini`. |
-| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Con `AI_PROVIDER=anthropic`. **`ANTHROPIC_MODEL` es obligatorio**: sin él la API responde 503. |
-| `GROQ_API_KEY`, `GROQ_MODEL` | Con `AI_PROVIDER=groq`. El modelo por defecto es `openai/gpt-oss-20b`. |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Con `AI_PROVIDER=anthropic`. El modelo por defecto es **claude-3-5-sonnet-latest**; define **ANTHROPIC_MODEL** para usar otro. |
+| `GROQ_API_KEY`, `GROQ_MODEL` | Con `AI_PROVIDER=groq`. El modelo por defecto es `llama-3.3-70b-versatile`. |
 
 La IA es opcional: sin la clave del proveedor elegido, el asistente responde con el texto de las guías.
 
@@ -323,6 +324,18 @@ INSERT INTO ticket_sla_alerts (ticket_id) SELECT id FROM tickets WHERE status <>
 
 ---
 
+## Asistente de IA y Búsqueda (RAG)
+
+El asistente utiliza una arquitectura de Generación Aumentada por Recuperación (RAG) adaptada para ser ligera, rápida y no depender de bases de datos vectoriales costosas. Su flujo de decisión es el siguiente:
+
+1. **Filtro de charla informal:** Si el mensaje es un saludo o agradecimiento, se responde localmente desde Node.js sin consumir tokens ni consultar a la base de datos.
+2. **Extracción de términos:** Se limpian signos de puntuación, tildes y palabras vacías (stop-words).
+3. **Full-Text Search (FTS):** La búsqueda no usa `ILIKE`. PostgreSQL convierte el texto en vectores léxicos (`tsvector`) reduciendo las palabras a su raíz, por lo que entiende que "configurar", "configuro" y "configuración" son lo mismo. 
+4. **Sistema de pesos (Relevance):** PostgreSQL asigna relevancia matemática a los resultados dando peso `A` al Título, `B` a las Palabras clave y `C` al Contenido del artículo. Solo pasan al modelo los artículos con relevancia mínima (0.1), hasta un máximo de 3. Si ninguno la alcanza, el asistente ofrece crear un ticket.
+5. **Generación estricta:** Se envía el texto completo de los artículos al LLM (OpenAI, Anthropic o Groq) con un System Prompt que impone un cerco estricto: la IA tiene prohibido inventar pasos, IPs, comandos o mezclar artículos que no estén directamente relacionados con el problema, reduciendo las alucinaciones.
+
+---
+
 ## Reportes y exportación
 
 - **Filtros** (aplican a gráficos, tablas y descargas): desde, hasta, estado, categoría y prioridad. Las fechas cuentan por días completos en la zona horaria de quien consulta.
@@ -377,7 +390,7 @@ INSERT INTO ticket_sla_alerts (ticket_id) SELECT id FROM tickets WHERE status <>
 | No aparecen **Categorías**, **Usuarios**, **Reportes** o el botón de añadir artículos | Esas opciones son solo para administradores: usa `npm run create-admin` |
 | No se envían avisos de plazo vencido | Comprueba que existe la tabla `ticket_sla_alerts` (`npm run db:setup`) y que alguien tiene la app abierta: la revisión corre al cargar la lista de tickets. El error, si lo hay, aparece en la consola de la API |
 | Al desplegar, todos los tickets viejos generan aviso de vencido | Es la primera revisión. Para evitarlo en adelante, usa el `INSERT` opcional de [Plazos de atención](#plazos-de-atención-sla) antes de desplegar |
-| El asistente responde «no encontré una solución» | La consulta no coincide con ninguna guía. Usa palabras del problema («VPN», «correo», «Teams») o añade la guía en Base de conocimiento. Los saludos y «¿cómo vas?» se responden aparte, sin buscar guías |
+| El asistente responde «no encontré una solución» | El motor (Full-Text Search) escanea título, palabras clave y contenido completo. Si no encuentra nada, el concepto realmente no existe en la base. Edita el artículo relacionado y añade sinónimos coloquiales en el campo Palabras clave (ej. añadir "post-it", "celular"). También puede ocurrir que la pregunta use palabras distintas a las de la guía: añade esos términos en Palabras clave, que tienen más peso que el contenido. |
 | Tildes como `?` (`Colaboraci?n`) | Comprueba que los archivos SQL se guardaron como UTF-8 y vuelve a ejecutar `npm run db:setup` |
 | Te saca al login de repente | La sesión dura 8 horas, o cambiaron la contraseña de tu cuenta (cierra todas las sesiones). Vuelve a entrar |
 | *Demasiados intentos de inicio de sesión* | Tras 5 fallos con el mismo correo y equipo se bloquea 15 minutos |
@@ -439,7 +452,7 @@ Cualquier persona que se registra en la interfaz queda con rol **Usuario**. El p
 1. **Con la consola SQL de Neon** (la más rápida). Quien tenga acceso al proyecto, tras registrarse la cuenta en la interfaz, ejecuta:
 
 ```sql
-   UPDATE users SET role = 'admin', token_version = token_version + 1 WHERE email = 'correo@ejemplo.com';
+UPDATE users SET role = 'admin', token_version = token_version + 1 WHERE email = 'correo@ejemplo.com';
 ```
 
    La persona debe cerrar sesión y volver a entrar.
@@ -447,7 +460,7 @@ Cualquier persona que se registra en la interfaz queda con rol **Usuario**. El p
 2. **Con el script del proyecto.** Desde la raíz, con `DATABASE_URL` de Neon en `backend/.env` o en la terminal:
 
 ```bash
-   npm --prefix backend run create-admin -- --email correo@ejemplo.com --name "Nombre" --password "clave-de-8-o-mas"
+npm --prefix backend run create-admin -- --email correo@ejemplo.com --name "Nombre" --password "clave-de-8-o-mas"
 ```
 
    Si la cuenta ya existe, la promueve; si no, la crea. Añade `--reset-password` para cambiar su contraseña.
